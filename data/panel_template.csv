@@ -1,0 +1,17 @@
+# Šablóna panela lokusov pre dna_tools panel-check.
+# Vyplň jeden riadok na lokus. Riadky začínajúce '#' sa ignorujú.
+#
+# Stĺpce (rsid ALEBO chromosome+position je povinné; ideálne oboje):
+#   rsid           - napr. rs1801133  (odporúčané, ak ho poznáš)
+#   chromosome     - 1..22, X, Y, MT  (fallback match podľa pozície)
+#   position       - GRCh37/hg19 súradnica (build 37 = 23andMe/MyHeritage)
+#   effect_allele  - (voliteľné) riziková/efektová alela; použije sa na
+#                    kontrolu strandu a neskôr na výpočet skóre
+#   trait          - (voliteľné) na čo lokus slúži (poznámka pre teba)
+#
+# Príklady (nahraď vlastnými ~1000 lokusmi):
+rsid,chromosome,position,effect_allele,trait
+rs1801133,1,11856378,T,MTHFR_C677T
+rs4988235,2,136608646,T,laktazova_perzistencia
+rs1229984,4,100239319,A,ADH1B_alkohol
+rs53576,3,8762685,G,OXTR

@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Genome Converter — localhost</title>
+<style>
+  :root{
+    --bg:#eef1f5;--card:#fff;--bd:#d6dce4;--bd2:#c3ccd6;--fg:#1f2328;--mut:#5b6572;
+    --grn:#1a7f37;--grn2:#dafbe1;--blu:#0969da;--blu2:#ddf0ff;--red:#cf222e;--red2:#ffebe9;
+    --amb:#9a6700;--amb2:#fff8c5;--accent:#4f46e5;--shadow:0 1px 3px rgba(27,31,36,.08),0 1px 2px rgba(27,31,36,.06);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:system-ui,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);line-height:1.5;overflow-x:hidden}
+  header{background:#0d1117;color:#e6edf3;padding:18px 22px;position:sticky;top:0;z-index:20;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  header .wrap{max-width:940px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  h1{font-size:1.1rem;margin:0;font-family:"Consolas",ui-monospace,monospace;letter-spacing:.04em;color:#7ee787}
+  .sub{color:#9aa7b4;font-size:.8rem;margin-top:2px;flex-basis:100%}
+  #statuschip{margin-left:auto;font-size:.72rem;background:#161b22;border:1px solid #30363d;border-radius:20px;
+              padding:5px 12px;color:#c9d1d9;cursor:pointer;white-space:nowrap}
+  main{max-width:940px;margin:20px auto 60px;padding:0 16px;display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);min-width:0;overflow:hidden}
+  .card h2{font-size:1rem;margin:0 0 14px;display:flex;align-items:center;gap:10px}
+  .step{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;flex:none;
+        display:inline-flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700}
+  .hint{color:var(--mut);font-size:.8rem;margin:-4px 0 12px}
+  label{font-size:.82rem;color:var(--mut);display:block;margin:10px 0 5px}
+
+  /* drop zone */
+  .drop{border:2px dashed var(--bd2);border-radius:10px;padding:18px;text-align:center;cursor:pointer;
+        transition:border-color .15s,background .15s;background:#fafbfc;font-size:.85rem;color:var(--mut);
+        overflow:hidden;overflow-wrap:anywhere;word-break:break-word}
+  .drop:hover{border-color:var(--accent);background:#f5f6ff}
+  .drop.over{border-color:var(--accent);background:#eef0ff}
+  .drop.has{border-style:solid;border-color:var(--grn);background:var(--grn2);color:var(--grn);font-weight:600}
+  .drop .ic{font-size:1.3rem;display:block;margin-bottom:4px}
+  .drop .dztext{display:block;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+  .drop input[type=file]{display:none}
+
+  .row{display:flex;gap:16px;flex-wrap:wrap} .row>div{flex:1 1 220px;min-width:0}
+  .opts{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 2px}
+  .opts label{display:flex;align-items:center;gap:6px;margin:0;cursor:pointer;font-size:.82rem;color:var(--fg)}
+  .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:9px 16px;
+         font-size:.86rem;font-weight:600;cursor:pointer;transition:.12s;display:inline-flex;align-items:center;gap:7px}
+  button:hover:not(:disabled){filter:brightness(1.08)} button:active{transform:translateY(1px)}
+  button:disabled{background:#aeb6c2;cursor:not-allowed}
+  button.ghost{background:#fff;color:var(--accent);border:1px solid var(--bd2)}
+  button.ghost:hover:not(:disabled){background:#f5f6ff}
+  input[type=number]{border:1px solid var(--bd2);border-radius:6px;padding:5px 8px;font-size:.85rem;width:72px}
+
+  .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;
+        animation:sp .7s linear infinite;display:inline-block}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .out{margin-top:14px;font-size:.84rem;display:none}
+  .out.show{display:block;animation:fade .2s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+  .err{background:var(--red2);border:1px solid #ffc9c4;color:var(--red);border-radius:8px;padding:11px 13px;font-size:.84rem}
+  .pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:600}
+  .pill.ok{background:var(--grn2);color:var(--grn)} .pill.no{background:var(--red2);color:var(--red)}
+  .pill.run{background:var(--blu2);color:var(--blu)}
+  pre.outlog{max-height:200px;overflow:auto;background:#0d1117;color:#c9d1d9;padding:10px;border-radius:8px;
+             font-size:.75rem;line-height:1.5;margin-top:8px;white-space:pre-wrap;word-break:break-word}
+
+  .stats{display:flex;gap:10px;flex-wrap:wrap}
+  .stat{flex:1;min-width:90px;background:#f6f8fa;border:1px solid var(--bd);border-radius:9px;padding:10px 12px}
+  .stat .v{font-size:1.35rem;font-weight:700;line-height:1.1}
+  .stat .k{font-size:.72rem;color:var(--mut);text-transform:uppercase;letter-spacing:.03em}
+  .stat.g .v{color:var(--grn)} .stat.a .v{color:var(--amb)} .stat.b .v{color:var(--blu)}
+
+  .fmt{display:inline-flex;align-items:center;gap:7px;background:var(--blu2);color:var(--blu);
+       border-radius:20px;padding:4px 12px;font-size:.82rem;font-weight:600;margin-bottom:6px}
+  .fmt .why{font-weight:400;color:var(--mut);font-size:.78rem}
+
+  .warns{margin-top:10px;background:var(--amb2);border:1px solid #f0e2a0;border-radius:8px;padding:9px 12px;font-size:.8rem;color:var(--amb)}
+  .warns div{margin:2px 0}
+
+  table.prev{width:100%;border-collapse:collapse;margin-top:12px;font-size:.78rem;font-family:ui-monospace,Consolas,monospace}
+  table.prev th{text-align:left;color:var(--mut);font-weight:600;border-bottom:2px solid var(--bd);padding:4px 8px;font-family:system-ui}
+  table.prev td{border-bottom:1px solid #eef1f4;padding:3px 8px}
+  table.prev tr:hover td{background:#fafbfc}
+  .previewwrap{max-height:230px;overflow:auto;border:1px solid var(--bd);border-radius:8px;margin-top:12px}
+  .nc{color:var(--red)}
+
+  .dlbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+  a.dl{display:inline-flex;align-items:center;gap:6px;background:var(--grn);color:#fff;text-decoration:none;
+       border-radius:8px;padding:8px 14px;font-size:.84rem;font-weight:600}
+  a.dl:hover{filter:brightness(1.07)}
+  .chain{font-size:.8rem;color:var(--mut);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+  .bar{height:12px;border-radius:8px;background:#eef1f4;overflow:hidden;margin:8px 0 4px}
+  .bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--grn),#3fb950);transition:width .5s}
+
+  details.log summary{cursor:pointer;font-size:.9rem;font-weight:600;color:var(--mut)}
+  pre#log{max-height:240px;overflow:auto;background:#0d1117;color:#c9d1d9;padding:12px;
+          border-radius:8px;font-size:.75rem;line-height:1.5;margin-top:10px;
+          white-space:pre-wrap;word-break:break-word}
+  .muted{color:var(--mut);font-size:.8rem}
+  hr.sep{border:0;border-top:1px solid var(--bd);margin:16px 0}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0d1117;color:#fff;
+         padding:10px 18px;border-radius:8px;font-size:.85rem;opacity:0;transition:.25s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1}
+
+  /* ---- dávkové spracovanie ---- */
+  .card.batch{border:2px solid var(--accent);box-shadow:0 2px 16px rgba(79,70,229,.16)}
+  .card.batch h2 .step{background:linear-gradient(135deg,#4f46e5,#7c3aed);font-size:.9rem}
+  button.big{padding:13px 22px;font-size:.98rem;border-radius:10px}
+  input.path{width:100%;border:1px solid var(--bd2);border-radius:8px;padding:9px 11px;
+             font-size:.86rem;font-family:ui-monospace,Consolas,monospace;background:#fafbfc}
+  .bitem{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border:1px solid var(--bd);
+         border-radius:9px;margin-top:8px;background:#fafbfc;font-size:.82rem}
+  .bitem .bico{flex:none;width:18px;text-align:center;font-size:.95rem;line-height:1.5}
+  .bitem .bgrow{flex:1;min-width:0}
+  .bitem .bname{font-weight:600;overflow-wrap:anywhere}
+  .bitem .bmeta{color:var(--mut);font-size:.76rem;margin-top:2px;overflow-wrap:anywhere}
+  .bitem.ok{background:var(--grn2);border-color:#a8e6b8}
+  .bitem.err{background:var(--red2);border-color:#ffc9c4}
+  .bitem.run{background:var(--blu2);border-color:#a9d5ff}
+  .bitem .bt{font-size:.74rem;color:var(--mut);flex:none;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div>
+      <h1>◧ GENOME CONVERTER <span id="appver" style="font-size:0.62em;opacity:0.65;font-weight:400">v2.1</span></h1>
+    </div>
+    <div id="statuschip" onclick="loadStatus()">⏳ zisťujem stav…</div>
+    <div class="sub">Lokálny prevod surových genetických dát → 23andMe formát + cielená imputácia. Všetko beží na tvojom počítači — dáta ho neopustia.</div>
+  </div>
+</header>
+<main>
+
+  <!-- DÁVKA: celá pipeline jedným tlačidlom -->
+  <div class="card batch">
+    <h2><span class="step">🚀</span> Celá pipeline jedným tlačidlom</h2>
+    <div class="hint">Vyber ľubovoľný počet vzoriek naraz + jeden SNP panel, zadaj cieľový priečinok a klikni.
+      Pre každú vzorku prebehne <b>prevod → kontrola panela → cielená imputácia → doplnenie do 23andMe</b> bez ďalších zásahov.
+      Hotové kompletné <code>.txt</code> súbory sa uložia do zadaného priečinka.</div>
+    <div class="row">
+      <div>
+        <label>vstupné vzorky (môžeš vybrať viac naraz)</label>
+        <div class="drop" id="bSamplesDrop"><span class="ic">🧬</span>
+          <span class="dztext">vzorky — MyHeritage / Ancestry / FTDNA / Illumina / VCF…</span>
+          <input type="file" id="bSamples" multiple></div>
+      </div>
+      <div>
+        <label>SNP panel (spoločný pre všetky vzorky)</label>
+        <div class="drop" id="bPanelDrop"><span class="ic">📋</span>
+          <span class="dztext">panel — zoznam rsID alebo CSV</span>
+          <input type="file" id="bPanel"></div>
+      </div>
+    </div>
+    <label>cieľový priečinok pre výsledky</label>
+    <input type="text" id="bOutDir" class="path" value="out"
+           placeholder="out   alebo   C:\Users\meno\Desktop\vysledky">
+    <div class="muted" style="margin-top:4px">Relatívna cesta sa berie od priečinka appky. Windows cestu (<code>C:\…</code>) preložím na WSL automaticky. Priečinok vytvorím, ak neexistuje.</div>
+
+    <label style="margin-top:14px">priečinok s BAM súbormi — len pre WGS/WES VCF (nepovinné)</label>
+    <input type="text" id="bBamDir" class="path" placeholder="napr. C:\data\bam   (nechaj prázdne, ak nahrávaš čipové dáta)">
+    <div class="muted" style="margin-top:4px">Ak nahráš <b>VCF zo sekvenovania</b>, appka ho rozpozná: hg38 preloží na GRCh37 a podľa BAM doplní <code>ref/ref</code> tam, kde bolo pokrytie (≥8×). BAM sa páruje podľa názvu (<code>S24061.GATK.snp.vcf</code> → <code>S24061*.bam</code>). Bez BAM ostanú nevariantné pozície ako no-call. <span id="wgsHint"></span></div>
+    <div class="btns">
+      <button id="bBtn" class="big" onclick="doBatch()" disabled>🚀 Spustiť celú pipeline</button>
+      <button id="bCancelBtn" class="ghost" onclick="cancelBatch()" style="display:none">Zrušiť dávku</button>
+    </div>
+    <div class="out" id="bOut"></div>
+  </div>
+
+  <!-- KROK 1 -->
+  <div class="card">
+    <h2><span class="step">1</span> Prevod do 23andMe formátu</h2>
+    <div class="hint">Podporované: 23andMe · AncestryDNA · MyHeritage · FamilyTreeDNA · VCF · PLINK (.ped/.map) · Illumina Final Report. Formát rozpozná automaticky.</div>
+
+    <div class="drop" id="convDrop">
+      <span class="ic">📄</span>
+      <span class="dztext">Presuň sem súbor alebo klikni na výber</span>
+      <input type="file" id="convFile">
+    </div>
+
+    <div class="opts">
+      <label><input type="checkbox" id="dropnc"> vynechať no-call (--)</label>
+      <label><input type="checkbox" id="onlyrs"> len rsID varianty</label>
+      <label><input type="checkbox" id="convOnline" checked> dohľadať chýbajúce pozície online (Ensembl) — pre Illumina rs-only sondy</label>
+    </div>
+
+    <div class="btns">
+      <button id="convBtn" onclick="doConvert()" disabled>Previesť do 23andMe</button>
+    </div>
+    <div class="out" id="convOut"></div>
+  </div>
+
+  <!-- KROK 2 -->
+  <div class="card">
+    <h2><span class="step">2</span> Kontrola pokrytia panela</h2>
+    <div class="hint">Zisti, koľko lokusov z tvojho panela je vo vzorke reálne zavolaných.</div>
+    <div class="row">
+      <div>
+        <label>Prevedený 23andMe súbor</label>
+        <div class="drop" id="pcSampleDrop"><span class="ic">🧬</span><span class="dztext">vzorka (.txt)</span><input type="file" id="pcSample"></div>
+      </div>
+      <div>
+        <label>Panel lokusov (rsID zoznam alebo CSV)</label>
+        <div class="drop" id="pcPanelDrop"><span class="ic">📋</span><span class="dztext">panel</span><input type="file" id="pcPanel"></div>
+      </div>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="pcOnline" checked> dohľadať chýbajúce pozície online (Ensembl) — von idú len rsID</label>
+    </div>
+    <div class="btns"><button id="pcBtn" onclick="doPanel()" disabled>Skontrolovať pokrytie</button></div>
+    <div class="out" id="pcOut"></div>
+  </div>
+
+  <!-- KROK 3 -->
+  <div class="card">
+    <h2><span class="step">3</span> Cielená imputácia</h2>
+    <div class="hint">Odhad okien okolo cieľových lokusov funguje offline. Reálna imputácia (Beagle + 1000G) potrebuje nastavenú referenciu — pozri stav hore.</div>
+    <label>Cieľové lokusy (CSV: rsid,chromosome,position)</label>
+    <div class="drop" id="impTargetsDrop"><span class="ic">🎯</span><span class="dztext">ciele (.csv)</span><input type="file" id="impTargets"></div>
+    <div class="btns"><button class="ghost" id="planBtn" onclick="doPlan()" disabled>Vypočítať okná (offline)</button></div>
+    <div class="out" id="planOut"></div>
+
+    <hr class="sep">
+    <div class="muted" style="margin-bottom:6px">Reálna imputácia:</div>
+    <div class="row">
+      <div><label>Prevedený 23andMe súbor</label>
+        <div class="drop" id="impSampleDrop"><span class="ic">🧬</span><span class="dztext">vzorka</span><input type="file" id="impSample"></div></div>
+      <div><label>Panel status CSV (z kroku 2)</label>
+        <div class="drop" id="impStatusDrop"><span class="ic">📊</span><span class="dztext">panel status</span><input type="file" id="impStatus"></div></div>
+    </div>
+    <div class="opts">
+      <label style="display:flex;align-items:center;gap:6px">Prah DR2 (spoľahlivosť): <input type="number" id="dr2" value="0.3" step="0.05" min="0" max="1"></label>
+      <label style="display:flex;align-items:center;gap:6px">Deduplikovať ciele podľa:
+        <select id="dedupBy" style="border:1px solid var(--bd2);border-radius:6px;padding:5px 8px;font-size:.85rem">
+          <option value="position">pozície</option>
+          <option value="rsid">rsID</option>
+        </select></label>
+    </div>
+    <div class="btns"><button id="impBtn" onclick="doImpute()" disabled>Spustiť imputáciu</button></div>
+    <div class="out" id="impOut"></div>
+  </div>
+
+  <!-- KROK 4 -->
+  <div class="card">
+    <h2><span class="step">4</span> Doplniť imputované do 23andMe súboru</h2>
+    <div class="hint">Vezme prevedený 23andMe súbor z kroku 1 a nalepí naň imputované genotypy z kroku 3: no-call prepíše, chýbajúce (absent) doplní, namerané nechá. Výstup je kompletný 23andMe <b>.txt</b>.</div>
+    <div class="row">
+      <div><label>Prevedený 23andMe súbor (krok 1)</label>
+        <div class="drop" id="mgSampleDrop"><span class="ic">🧬</span><span class="dztext">vzorka (.txt)</span><input type="file" id="mgSample"></div></div>
+      <div><label>Finálny panel z kroku 3 (…_panel_final.csv)</label>
+        <div class="drop" id="mgPanelDrop"><span class="ic">🧩</span><span class="dztext">panel_final.csv</span><input type="file" id="mgPanel"></div></div>
+    </div>
+    <label>Min. spoľahlivosť imputácie (max GP): <input type="number" id="mgConf" value="0" step="0.05" min="0" max="1"></label>
+    <div class="hint" style="margin-top:2px">0 = doplniť všetky imputované. Napr. 0,9 = len veľmi isté.</div>
+    <div class="btns"><button id="mgBtn" onclick="doMerge()" disabled>Vytvoriť kompletný 23andMe</button></div>
+    <div class="out" id="mgOut"></div>
+  </div>
+
+  <!-- LOG -->
+  <div class="card">
+    <details class="log">
+      <summary>Log (na ladenie)</summary>
+      <div class="btns"><button class="ghost" onclick="loadLog()">Obnoviť log</button></div>
+      <pre id="log">—</pre>
+    </details>
+  </div>
+
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function show(el,html){el.innerHTML=html;el.classList.add('show');}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+async function post(url,fd){
+  const r=await fetch(url,{method:'POST',body:fd});
+  if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail||m;}catch(e){}throw new Error(m);}
+  return r.json();
+}
+function loading(btn,on,label){
+  if(on){btn.dataset.txt=btn.textContent;btn.disabled=true;btn.innerHTML='<span class="spin"></span>'+(label||'pracujem…');}
+  else{btn.disabled=false;btn.textContent=btn.dataset.txt||btn.textContent;}
+}
+
+/* ---------- drop zóny ---------- */
+function fname(input){return input.files&&input.files[0]?input.files[0].name:null;}
+function setZone(zone,input){
+  const t=zone.querySelector('.dztext'), n=fname(input);
+  if(n){zone.classList.add('has');t.textContent='✓ '+n;}
+  else{zone.classList.remove('has');t.textContent=t.dataset.def;}
+}
+function makeZone(zoneId,inputId,onFile){
+  const zone=$(zoneId), input=$(inputId), t=zone.querySelector('.dztext');
+  t.dataset.def=t.textContent;
+  zone.addEventListener('click',()=>input.click());
+  input.addEventListener('change',()=>{setZone(zone,input);onFile&&onFile();});
+  ['dragenter','dragover'].forEach(e=>zone.addEventListener(e,ev=>{ev.preventDefault();zone.classList.add('over');}));
+  ['dragleave','drop'].forEach(e=>zone.addEventListener(e,ev=>{ev.preventDefault();zone.classList.remove('over');}));
+  zone.addEventListener('drop',ev=>{
+    const f=ev.dataTransfer.files;if(!f||!f.length)return;
+    const dt=new DataTransfer();dt.items.add(f[0]);input.files=dt.files;
+    setZone(zone,input);onFile&&onFile();
+  });
+}
+/* naplní file input z Blobu (reťazenie krokov) */
+function injectFile(inputId,zoneId,blob,name){
+  const dt=new DataTransfer();dt.items.add(new File([blob],name,{type:'text/plain'}));
+  $(inputId).files=dt.files;setZone($(zoneId),$(inputId));
+}
+
+/* ---------- DÁVKA: celá pipeline jedným tlačidlom ---------- */
+function setMultiZone(zone,input){
+  const t=zone.querySelector('.dztext'), fs=input.files;
+  if(fs&&fs.length){
+    zone.classList.add('has');
+    t.textContent=fs.length===1?('✓ '+fs[0].name):('✓ '+fs.length+' súborov: '+[...fs].map(f=>f.name).join(', '));
+  }else{zone.classList.remove('has');t.textContent=t.dataset.def;}
+}
+function makeMultiZone(zoneId,inputId,onFiles){
+  const zone=$(zoneId), input=$(inputId), t=zone.querySelector('.dztext');
+  t.dataset.def=t.textContent;
+  zone.addEventListener('click',()=>input.click());
+  input.addEventListener('change',()=>{setMultiZone(zone,input);onFiles&&onFiles();});
+  ['dragenter','dragover'].forEach(e=>zone.addEventListener(e,ev=>{ev.preventDefault();zone.classList.add('over');}));
+  ['dragleave','drop'].forEach(e=>zone.addEventListener(e,ev=>{ev.preventDefault();zone.classList.remove('over');}));
+  zone.addEventListener('drop',ev=>{
+    const f=ev.dataTransfer.files;if(!f||!f.length)return;
+    const dt=new DataTransfer();[...f].forEach(x=>dt.items.add(x));input.files=dt.files;
+    setMultiZone(zone,input);onFiles&&onFiles();
+  });
+}
+function bCheck(){
+  $('bBtn').disabled=!($('bSamples').files.length&&$('bPanel').files.length);
+}
+makeMultiZone('bSamplesDrop','bSamples',bCheck);
+makeZone('bPanelDrop','bPanel',bCheck);
+
+let batchId=null,batchTimer=null;
+const BICON={pending:'○',running:'<span class="spin" style="border-color:rgba(9,105,218,.3);border-top-color:#0969da"></span>',ok:'✅',error:'❌',cancelled:'⊘'};
+
+function fmtT(s){const m=Math.floor(s/60),r=s%60;return m?`${m}m ${r}s`:`${r}s`;}
+
+async function doBatch(){
+  const samples=$('bSamples').files, panel=$('bPanel').files[0];
+  if(!samples.length||!panel)return;
+  const fd=new FormData();
+  [...samples].forEach(f=>fd.append('samples',f));
+  fd.append('panel',panel);
+  fd.append('out_dir',$('bOutDir').value||'out');
+  fd.append('bam_dir',$('bBamDir').value||'');
+  loading($('bBtn'),true,'spúšťam…');
+  try{
+    const d=await post('/api/batch-run',fd);
+    batchId=d.job_id;
+    $('bCancelBtn').style.display='';
+    show($('bOut'),'<div class="muted">štartujem…</div>');
+    toast(`Dávka beží — ${d.n} vzoriek → ${d.out_dir}`);
+    pollBatch();
+  }catch(e){
+    loading($('bBtn'),false);
+    show($('bOut'),`<div class="err">${esc(e.message)}</div>`);
+  }
+}
+
+function pollBatch(){
+  clearTimeout(batchTimer);
+  batchTimer=setTimeout(async()=>{
+    if(!batchId)return;
+    try{
+      const d=await fetch('/api/batch-progress/'+batchId).then(r=>r.json());
+      renderBatch(d);
+      if(!d.done){pollBatch();}
+      else{
+        loading($('bBtn'),false);
+        $('bCancelBtn').style.display='none';
+        const ok=d.items.filter(i=>i.status==='ok').length;
+        toast(`Dávka hotová: ${ok}/${d.total} vzoriek za ${fmtT(d.elapsed)}`);
+      }
+    }catch(e){pollBatch();}
+  },1200);
+}
+
+function renderBatch(d){
+  const pct=d.total?Math.round(100*d.done_count/d.total):0;
+  const rows=d.items.map(it=>{
+    const cls=it.status==='ok'?'ok':(it.status==='error'?'err':(it.status==='pending'?'':'run'));
+    let meta='';
+    if(it.status==='error'){meta=`<span style="color:var(--red)">${esc(it.error||'chyba')}</span>`;}
+    else{
+      const bits=[];
+      if(it.source_format)bits.push(esc(it.source_format));
+      if(it.wes_variant!=null){
+        bits.push(`${it.wes_variant.toLocaleString('sk')} variantov · `+
+          (it.wes_bam?`${(it.wes_homref||0).toLocaleString('sk')} ref/ref z BAM`:'bez BAM')+
+          ` · ${(it.wes_nocall||0).toLocaleString('sk')} no-call`);
+      }else if(it.n_variants)bits.push(it.n_variants.toLocaleString('sk')+' variantov');
+      if(it.coverage_before!=null)bits.push(`panel ${it.coverage_before}%`+
+        (it.coverage_after!=null&&it.coverage_after!==it.coverage_before?` → <b>${it.coverage_after}%</b>`:''));
+      if(it.added_absent)bits.push(`+${it.added_absent} doimputovaných`);
+      if(it.skip_reason)bits.push(esc(it.skip_reason));
+      if(it.regions_total&&it.status!=='ok')bits.push(`regióny ${it.regions_done}/${it.regions_total}`);
+      if(it.out_name)bits.push(`→ <code>${esc(it.out_name)}</code>`);
+      meta=bits.join(' · ');
+    }
+    const ico=it.status==='running'||(it.status==='pending'&&it.stage_no>0)?BICON.running:(BICON[it.status]||'○');
+    const stage=it.status==='ok'?'hotovo':(it.status==='error'?'chyba':esc(it.stage));
+    return `<div class="bitem ${cls}">
+      <div class="bico">${ico}</div>
+      <div class="bgrow"><div class="bname">${esc(it.name)} <span class="muted">— ${stage}</span></div>
+      <div class="bmeta">${meta}</div></div>
+      <div class="bt">${it.elapsed?fmtT(it.elapsed):''}</div></div>`;
+  }).join('');
+  const dl=d.report?`<div class="muted" style="margin-top:10px">Prehľad dávky: <code>${esc(d.report)}</code></div>`:'';
+  show($('bOut'),
+    `<div class="chain"><span class="pill ${d.done?'ok':'run'}">${d.done?'hotovo':'beží'}</span>
+       <span>${d.done_count}/${d.total} vzoriek · ${fmtT(d.elapsed)}</span></div>
+     <div class="bar"><span style="width:${pct}%"></span></div>
+     <div class="muted">výsledky sa ukladajú do <code>${esc(d.out_dir)}</code> · panel: ${esc(d.panel)}</div>
+     ${rows}
+     ${d.error?`<div class="err" style="margin-top:10px">${esc(d.error)}</div>`:''}
+     ${dl}
+     ${d.tail&&d.tail.length?`<details style="margin-top:10px"><summary class="muted">živý výpis</summary>
+        <pre class="outlog">${esc(d.tail.join('\n'))}</pre></details>`:''}`);
+}
+
+async function cancelBatch(){
+  if(!batchId)return;
+  try{await fetch('/api/batch-cancel/'+batchId,{method:'POST'});toast('Ruším po dobehnutí aktuálnej vzorky…');}
+  catch(e){toast('Zrušenie zlyhalo');}
+}
+
+/* ---------- KROK 1: prevod (auto-detekcia pri výbere) ---------- */
+let convToken=null;
+makeZone('convDrop','convFile',async()=>{
+  const f=$('convFile').files[0];$('convBtn').disabled=!f;convToken=null;
+  $('convOut').classList.remove('show');
+  if(!f)return;
+  // auto-detekcia formátu
+  const fd=new FormData();fd.append('file',f);
+  show($('convOut'),'<span class="muted">rozpoznávam formát…</span>');
+  try{const d=await post('/api/detect',fd);
+    show($('convOut'),`<div class="fmt">rozpoznané: ${esc(d.format)} <span class="why">— ${esc(d.reason)}</span></div>`);
+  }catch(e){show($('convOut'),`<div class="err">Detekcia zlyhala: ${esc(e.message)}</div>`);}
+});
+
+async function doConvert(){
+  const f=$('convFile').files[0];if(!f)return;
+  const fd=new FormData();fd.append('file',f);
+  fd.append('drop_no_call',$('dropnc').checked);fd.append('only_rs',$('onlyrs').checked);
+  fd.append('online',$('convOnline').checked);
+  loading($('convBtn'),true,$('convOnline').checked?'prevádzam + online…':'prevádzam…');
+  try{
+    const d=await post('/api/convert',fd);
+    convToken=d.output;
+    const pct=d.n_variants?Math.round(1000*d.n_called/d.n_variants)/10:0;
+    let prev='';
+    if(d.preview&&d.preview.length){
+      const rows=d.preview.map(l=>{const c=l.split('\t');
+        const gt=c[3]==='--'?`<span class="nc">--</span>`:esc(c[3]);
+        return `<tr><td>${esc(c[0])}</td><td>${esc(c[1])}</td><td>${esc(c[2])}</td><td>${gt}</td></tr>`;}).join('');
+      prev=`<div class="previewwrap"><table class="prev">
+        <thead><tr><th>rsid</th><th>chr</th><th>pozícia</th><th>genotyp</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+        <div class="muted" style="margin-top:4px">náhľad prvých ${d.preview.length} riadkov</div>`;
+    }
+    let warns='';
+    if(d.warnings&&d.warnings.length)
+      warns=`<div class="warns">${d.warnings.map(w=>`<div>⚠ ${esc(w)}</div>`).join('')}</div>`;
+    show($('convOut'),
+      `<div class="fmt">zdroj: ${esc(d.source_format)}</div>
+       <div class="stats">
+         <div class="stat b"><div class="v">${d.n_variants.toLocaleString('sk')}</div><div class="k">variantov</div></div>
+         <div class="stat g"><div class="v">${d.n_called.toLocaleString('sk')}</div><div class="k">zavolaných · ${pct}%</div></div>
+         <div class="stat a"><div class="v">${d.no_call.toLocaleString('sk')}</div><div class="k">no-call</div></div>
+       </div>${warns}${prev}
+       <div class="dlbar">
+         <a class="dl" href="${d.download}">⬇ stiahnuť ${esc(d.output)}</a>
+         <span class="chain">použiť v:
+           <button class="ghost" style="padding:6px 12px" onclick="useConverted('pc')">kroku 2</button>
+           <button class="ghost" style="padding:6px 12px" onclick="useConverted('imp')">kroku 3</button>
+           <button class="ghost" style="padding:6px 12px" onclick="useConverted('merge')">kroku 4</button>
+         </span>
+       </div>`);
+    loadLog();
+  }catch(e){show($('convOut'),`<div class="err">Prevod zlyhal: ${esc(e.message)}</div>`);}
+  finally{loading($('convBtn'),false);}
+}
+
+/* reťazenie: prevedený súbor rovno do kroku 2/3 bez re-uploadu */
+async function useConverted(where){
+  if(!convToken)return;
+  const blob=await (await fetch('/api/download/'+convToken)).blob();
+  if(where==='pc'){injectFile('pcSample','pcSampleDrop',blob,convToken);refreshPanelBtn();
+    $('pcSampleDrop').scrollIntoView({block:'center'});toast('Vzorka vložená do kroku 2');}
+  else if(where==='imp'){injectFile('impSample','impSampleDrop',blob,convToken);refreshImpBtns();
+    $('impSampleDrop').scrollIntoView({block:'center'});toast('Vzorka vložená do kroku 3');}
+  else{injectFile('mgSample','mgSampleDrop',blob,convToken);refreshMergeBtn();
+    $('mgSampleDrop').scrollIntoView({block:'center'});toast('Vzorka vložená do kroku 4');}
+}
+
+/* ---------- KROK 2: panel-check ---------- */
+function refreshPanelBtn(){$('pcBtn').disabled=!($('pcSample').files[0]&&$('pcPanel').files[0]);}
+makeZone('pcSampleDrop','pcSample',refreshPanelBtn);
+makeZone('pcPanelDrop','pcPanel',refreshPanelBtn);
+async function doPanel(){
+  const s=$('pcSample').files[0],p=$('pcPanel').files[0];if(!s||!p)return;
+  const fd=new FormData();fd.append('sample',s);fd.append('panel',p);
+  fd.append('online',$('pcOnline').checked);
+  loading($('pcBtn'),true,$('pcOnline').checked?'kontrolujem + online…':'kontrolujem…');
+  try{const d=await post('/api/panel-check',fd);
+    show($('pcOut'),
+      `<div class="stats">
+         <div class="stat b"><div class="v">${d.n_panel}</div><div class="k">lokusov v paneli</div></div>
+         <div class="stat g"><div class="v">${d.called}</div><div class="k">zavolaných</div></div>
+         <div class="stat a"><div class="v">${d.no_call}</div><div class="k">no-call</div></div>
+         <div class="stat"><div class="v">${d.absent}</div><div class="k">chýba</div></div>
+       </div>
+       <label style="margin-top:12px">pokrytie: <b>${d.coverage_pct}%</b></label>
+       <div class="bar"><span style="width:${d.coverage_pct}%"></span></div>
+       <div class="muted">match: rsID ${d.matched_by_rsid} · pozícia ${d.matched_by_pos}${d.enriched?` · <span style="color:var(--grn)">z 23andMe ref: +${d.enriched}</span>`:''}${d.enriched_online?` · <span style="color:var(--blu)">online (Ensembl): +${d.enriched_online}</span>`:''}</div>
+       <div class="dlbar">
+         <a class="dl" href="${d.download_all}">⬇ prehľad</a>
+         <a class="dl" style="background:var(--blu)" href="${d.download_missing}">⬇ chýbajúce</a>
+       </div>
+       <div class="chain" style="margin-top:10px">do kroku 3:
+         <button class="ghost" style="padding:6px 12px" onclick="useTargets('${d.download_missing}')">chýbajúce → Cieľové lokusy</button>
+         <button class="ghost" style="padding:6px 12px" onclick="usePanelStatus('${d.download_all}')">prehľad → Panel status</button>
+       </div>`);
+  }catch(e){show($('pcOut'),`<div class="err">Kontrola zlyhala: ${esc(e.message)}</div>`);}
+  finally{loading($('pcBtn'),false);}
+}
+async function usePanelStatus(url){
+  const blob=await (await fetch(url)).blob();
+  injectFile('impStatus','impStatusDrop',blob,url.split('/').pop());refreshImpBtns();
+  $('impStatusDrop').scrollIntoView({block:'center'});toast('Panel status vložený do kroku 3');
+}
+async function useTargets(url){
+  const blob=await (await fetch(url)).blob();
+  injectFile('impTargets','impTargetsDrop',blob,url.split('/').pop());refreshImpBtns();
+  $('impTargetsDrop').scrollIntoView({block:'center'});toast('Chýbajúce lokusy vložené ako ciele (krok 3)');
+}
+
+/* ---------- KROK 3: plán + imputácia ---------- */
+function refreshImpBtns(){
+  $('planBtn').disabled=!$('impTargets').files[0];
+  $('impBtn').disabled=!(imputeReady&&$('impSample').files[0]&&$('impTargets').files[0]&&$('impStatus').files[0]);
+}
+makeZone('impTargetsDrop','impTargets',refreshImpBtns);
+makeZone('impSampleDrop','impSample',refreshImpBtns);
+makeZone('impStatusDrop','impStatus',refreshImpBtns);
+async function doPlan(){
+  const t=$('impTargets').files[0];if(!t)return;
+  const fd=new FormData();fd.append('targets',t);
+  loading($('planBtn'),true,'počítam…');
+  try{const d=await post('/api/impute-plan',fd);
+    show($('planOut'),
+      `<div class="stats">
+         <div class="stat b"><div class="v">${d.targets}</div><div class="k">cieľov</div></div>
+         <div class="stat"><div class="v">${d.regions}</div><div class="k">regiónov</div></div>
+         <div class="stat a"><div class="v">${d.covered_mb}</div><div class="k">Mb genómu</div></div>
+       </div>`);
+  }catch(e){show($('planOut'),`<div class="err">Výpočet zlyhal: ${esc(e.message)}</div>`);}
+  finally{loading($('planBtn'),false);}
+}
+async function doImpute(){
+  const s=$('impSample').files[0],t=$('impTargets').files[0],p=$('impStatus').files[0];
+  if(!s||!t||!p)return;
+  const fd=new FormData();fd.append('sample',s);fd.append('targets',t);
+  fd.append('panel_status',p);fd.append('dr2_min',$('dr2').value);
+  fd.append('dedup_by',$('dedupBy').value);
+  loading($('impBtn'),true,'beží…');
+  show($('impOut'),'<span class="muted">spúšťam imputáciu…</span>');
+  try{
+    const {job_id}=await post('/api/impute-run',fd);
+    pollImpute(job_id);
+  }catch(e){
+    show($('impOut'),`<div class="err">Imputácia zlyhala: ${esc(e.message)}</div>`);
+    loading($('impBtn'),false);loadLog();
+  }
+}
+function pollImpute(job){
+  const tick=async()=>{
+    let d;
+    try{ d=await (await fetch('/api/impute-progress/'+job)).json(); }
+    catch(e){ setTimeout(tick,2500); return; }
+    const pct=d.regions_total?Math.round(100*d.regions_done/d.regions_total):0;
+    const bar=(d.regions_total&&d.step>=4)
+      ? `<div class="bar"><span style="width:${pct}%"></span></div>
+         <div class="muted">región ${d.regions_done}/${d.regions_total}</div>` : '';
+    const outlog=`<pre class="outlog">${esc((d.tail||[]).join('\n'))}</pre>`;
+    if(!d.done){
+      show($('impOut'),
+        `<div><span class="pill run">krok ${d.step||0}/6</span> ${esc(d.step_name||'')} · ${d.elapsed||0}s</div>
+         ${bar}${outlog}`);
+      setTimeout(tick,2500);
+    }else{
+      loading($('impBtn'),false);
+      const ok=d.returncode===0&&!d.error;
+      const dl=d.download?`<div class="dlbar"><a class="dl" href="${d.download}">⬇ finálny panel</a>${d.download_unimputed?`<a class="dl" style="background:var(--amb)" href="${d.download_unimputed}">⬇ neimputované (na rozhodnutie)</a>`:''}</div>`:'';
+      const badge=ok?`<span class="pill ok">hotovo · ${d.elapsed||0}s</span>`
+                    :`<span class="pill no">chyba${d.returncode!=null?' (exit '+d.returncode+')':''}</span>`;
+      const errBlk=d.error?`<div class="err" style="margin-top:8px">${esc(d.error)}</div>`:'';
+      const chain=d.download?`<div class="chain" style="margin-top:8px">do kroku 4:
+        <button class="ghost" style="padding:6px 12px" onclick="useFinalPanel('${d.download}')">finálny panel → krok 4</button></div>`:'';
+      show($('impOut'),`<div>${badge}</div>${bar}${outlog}${errBlk}${dl}${chain}`);
+      loadLog();
+    }
+  };
+  tick();
+}
+
+/* ---------- KROK 4: doplnenie imputovaneho do 23andMe ---------- */
+function refreshMergeBtn(){$('mgBtn').disabled=!($('mgSample').files[0]&&$('mgPanel').files[0]);}
+makeZone('mgSampleDrop','mgSample',refreshMergeBtn);
+makeZone('mgPanelDrop','mgPanel',refreshMergeBtn);
+async function useFinalPanel(url){
+  const blob=await (await fetch(url)).blob();
+  injectFile('mgPanel','mgPanelDrop',blob,url.split('/').pop());refreshMergeBtn();
+  $('mgPanelDrop').scrollIntoView({block:'center'});toast('Finálny panel vložený do kroku 4');
+}
+async function doMerge(){
+  const s=$('mgSample').files[0],p=$('mgPanel').files[0];if(!s||!p)return;
+  const fd=new FormData();fd.append('sample',s);fd.append('panel_final',p);
+  fd.append('min_conf',$('mgConf').value||'0');
+  loading($('mgBtn'),true,'skladám…');
+  try{const d=await post('/api/merge-final',fd);
+    show($('mgOut'),
+      `<div class="stats">
+         <div class="stat b"><div class="v">${(d.total||0).toLocaleString('sk')}</div><div class="k">pozícií spolu</div></div>
+         <div class="stat g"><div class="v">${(d.replaced_nocall||0).toLocaleString('sk')}</div><div class="k">no-call doplnených</div></div>
+         <div class="stat a"><div class="v">${(d.added_absent||0).toLocaleString('sk')}</div><div class="k">nových pridaných</div></div>
+       </div>
+       <div class="dlbar"><a class="dl" href="${d.download}">⬇ ${esc(d.output)}</a></div>`);
+    loadLog();
+  }catch(e){show($('mgOut'),`<div class="err">Doplnenie zlyhalo: ${esc(e.message)}</div>`);}
+  finally{loading($('mgBtn'),false);}
+}
+
+/* ---------- stav + log ---------- */
+let imputeReady=false;
+async function loadStatus(){
+  try{const s=await (await fetch('/api/status')).json();
+    if(s.version){const av=$('appver');if(av)av.textContent='v'+s.version;}
+    imputeReady=!!s.imputation_ready;refreshImpBtns();
+    const chip=$('statuschip');
+    if(s.imputation_ready){chip.innerHTML='✅ imputácia pripravená';chip.style.color='#7ee787';}
+    else{chip.innerHTML='⚙️ prevod OK · imputácia: nastav referenciu';chip.style.color='#e3b341';}
+    chip.title=`Python ${s.python} · Java ${s.java?'áno':'nie'} · Beagle ${s.beagle_jar?'áno':'nie'} · `+
+               `FASTA ${s.fasta?'áno':'nie'} · bref3: ${s.bref3_files} · ID ref ${s.id_reference?'áno':'nie'}`;
+    const w=s.wgs||{}, wh=$('wgsHint');
+    if(wh){
+      if(w.wgs_ready&&w.samtools&&w.template_hg38)
+        wh.innerHTML='<b style="color:var(--grn)">WGS/WES režim pripravený.</b>';
+      else{
+        const chyba=[];
+        if(!w.pyliftover)chyba.push('pyliftover');
+        if(!w.chain_38to19||!w.chain_19to38)chyba.push('chain súbory');
+        if(!w.template_hg38)chyba.push('hg38 šablóna');
+        if(!w.samtools)chyba.push('samtools');
+        wh.innerHTML='<b style="color:var(--amb)">WGS/WES režim ešte nie je pripravený</b> — chýba: '+
+                     esc(chyba.join(', '))+'. Spusti raz <code>bash setup_wgs.sh</code> vo WSL.';
+      }
+    }
+  }catch(e){const c=$('statuschip');c.innerHTML='⛔ API nebeží';c.style.color='#ff7b72';}
+}
+async function loadLog(){try{$('log').textContent=await (await fetch('/api/logs')).text();}catch(e){}}
+loadStatus();loadLog();setInterval(loadStatus,15000);
+</script>
+</body>
+</html>

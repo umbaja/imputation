@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.venv-wsl/
+build/
+dist/
+
+# Runtime and downloaded reference data
+ref/
+work/
+work_ti/
+logs/
+out/
+results/
+samples/
+uploads/
+
+# Local development/archive material
+_to_delete/
+panel_diff/
+*.lnk
+
+# Personal/generated data that previously lived under data/
+data/jakub_final_all.csv
+data/impute_targets.csv
+data/impute_targets_chr22.csv
+data/panel_ids_561.txt
+panel/
+
+# Raw genetic data should never be committed
+*.bam
+*.bai
+*.cram
+*.crai
+*.vcf
+*.vcf.gz
+*.bcf
+*.ped
+*.bed
+*.bim
+*.fam
+*.pgen
+*.pvar
+*.psam
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
