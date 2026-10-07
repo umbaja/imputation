@@ -29,8 +29,8 @@ zámerne odmietnutý, pretože by mohol obrátiť alely.
 Na Windowse sa odporúča WSL2:
 
 ```bash
-git clone https://github.com/umbaja/genome-app.git
-cd genome-app
+git clone https://github.com/umbaja/imputation.git
+cd imputation
 bash install_tools_root.sh       # raz, so sudo/root oprávnením
 bash setup_reference.sh          # raz; stiahne približne 13 GB
 bash start_app.sh
