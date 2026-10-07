@@ -1,74 +1,202 @@
 #!/usr/bin/env bash
-# =============================================================================
-# setup_reference.sh — stiahne VSETKO potrebne pre lokalnu Beagle imputaciu
-# =============================================================================
-# Stiahne: Beagle jar, geneticke mapy GRCh37, 1000G b37 bref3 panel (chr1-22),
-# a referencnu FASTA GRCh37. Spusti RAZ na svojom stroji (ma pristup na internet).
-#
-# POUZITIE:  ./setup_reference.sh            # stiahne chr1-22
-#            CHROMS="20 21 22" ./setup_reference.sh   # len vybrane chromozomy
-# =============================================================================
+# Download and verify the external GRCh37/Beagle reference bundle.
 set -euo pipefail
-REF=ref
-mkdir -p "$REF/b37.bref3" "$REF/maps"
-CHROMS="${CHROMS:-1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22}"
-BASE_BREF="https://bochet.gcc.biostat.washington.edu/beagle/1000_Genomes_phase3_v5a/b37.bref3"
-BASE_MAP="https://bochet.gcc.biostat.washington.edu/beagle/genetic_maps"
 
-echo "[1/4] Beagle jar"
-if [ ! -f "$REF/beagle.jar" ]; then
-  # zisti aktualny nazov jar na stranke Beagle a stiahni; fallback na znamu verziu
-  curl -fsSL -o "$REF/beagle.jar" \
-    "https://faculty.washington.edu/browning/beagle/beagle.27Feb25.75f.jar"
-fi
-echo "    -> $REF/beagle.jar"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST="${REFERENCE_MANIFEST:-$ROOT/reference_manifest.tsv}"
+REF="${REFERENCE_DIR:-$ROOT/ref}"
+CHROMS="${CHROMS:-1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X}"
+VERIFY_ONLY=0
 
-echo "[2/4] Geneticke mapy GRCh37"
-if [ ! -f "$REF/maps/plink.chr22.GRCh37.map" ]; then
-  curl -fsSL -o "$REF/maps/plink.GRCh37.map.zip" "$BASE_MAP/plink.GRCh37.map.zip"
-  unzip -o "$REF/maps/plink.GRCh37.map.zip" -d "$REF/maps" >/dev/null
-fi
-echo "    -> $REF/maps/plink.chrN.GRCh37.map"
+usage() {
+  cat <<'EOF'
+Použitie:
+  bash setup_reference.sh
+  CHROMS="20 21 22" bash setup_reference.sh
+  bash setup_reference.sh --verify-only
 
-echo "[3/4] 1000G b37 bref3 panel (chromozomy: $CHROMS)"
-# Tip: chrX dotiahnes samostatne:  CHROMS="X" bash setup_reference.sh
-dl_bref3() {                       # $1 = chromozom (1..22 alebo X)
-  local c="$1"
-  local f="$REF/b37.bref3/chr${c}.1kg.phase3.v5a.b37.bref3"
-  [ -f "$f" ] && return 0
-  echo "    sťahujem chr${c} ..."
-  # X byva inak verzovany (v5a/v5b) — skus varianty, uloz vzdy pod v5a nazvom
-  local name
-  for name in "chr${c}.1kg.phase3.v5a.b37.bref3" \
-              "chr${c}.1kg.phase3.v5b.b37.bref3"; do
-    if curl -fsSL -o "$f" "$BASE_BREF/${name}"; then
-      return 0
-    fi
+Premenné:
+  CHROMS              chromozómy bref3, predvolene 1-22 a X
+  REFERENCE_DIR       cieľový priečinok, predvolene ./ref
+  REFERENCE_MANIFEST  iný manifest, predvolene ./reference_manifest.tsv
+EOF
+}
+
+case "${1:-}" in
+  "") ;;
+  --verify-only) VERIFY_ONLY=1 ;;
+  -h|--help) usage; exit 0 ;;
+  *) usage >&2; exit 2 ;;
+esac
+
+for command_name in sha256sum wc tr awk; do
+  command -v "$command_name" >/dev/null 2>&1 || {
+    echo "CHYBA: chýba príkaz $command_name" >&2
+    exit 1
+  }
+done
+if [ "$VERIFY_ONLY" -eq 0 ]; then
+  for command_name in curl unzip gzip; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      echo "CHYBA: chýba príkaz $command_name" >&2
+      exit 1
+    }
   done
-  rm -f "$f"
-  echo "    !! chr${c}: bref3 sa nepodarilo stiahnut. Skontroluj nazov v adresari:"
-  echo "       $BASE_BREF/"
-  echo "       a uloz ho ako $f"
+fi
+[ -f "$MANIFEST" ] || { echo "CHYBA: manifest neexistuje: $MANIFEST" >&2; exit 1; }
+mkdir -p "$REF/b37.bref3" "$REF/maps"
+
+verify_file() {
+  local path="$1" expected_bytes="$2" expected_sha="$3"
+  local actual_bytes actual_sha
+  [ -f "$path" ] || return 1
+  actual_bytes="$(wc -c < "$path" | tr -d '[:space:]')"
+  [ "$actual_bytes" = "$expected_bytes" ] || return 1
+  actual_sha="$(sha256sum "$path" | awk '{print $1}')"
+  [ "$actual_sha" = "$expected_sha" ]
+}
+
+selected_chromosome() {
+  local chromosome="$1" wanted
+  for wanted in $CHROMS; do
+    [ "$wanted" = "$chromosome" ] && return 0
+  done
   return 1
 }
-for c in $CHROMS; do
-  dl_bref3 "$c" || echo "    (chr${c} preskocene)"
-done
-echo "    -> $REF/b37.bref3/"
 
-echo "[4/4] Referencna FASTA GRCh37 (human_g1k_v37)"
-if [ ! -f "$REF/human_g1k_v37.fasta" ]; then
-  curl -fsSL -o "$REF/human_g1k_v37.fasta.gz" \
-    "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz"
-  gunzip -k "$REF/human_g1k_v37.fasta.gz"
-  # index pre bcftools +fixref
-  command -v samtools >/dev/null && samtools faidx "$REF/human_g1k_v37.fasta" || true
+download_verified() {
+  local target="$1" expected_bytes="$2" expected_sha="$3" url="$4"
+  local part backup
+  if verify_file "$target" "$expected_bytes" "$expected_sha"; then
+    echo "  OK (cache): ${target#"$ROOT/"}"
+    return 0
+  fi
+  if [ "$VERIFY_ONLY" -eq 1 ]; then
+    echo "  CHYBA: chýba alebo nesedí checksum: $target" >&2
+    return 1
+  fi
+
+  mkdir -p "$(dirname -- "$target")"
+  part="${target}.part"
+  echo "  sťahujem: $url"
+  curl --fail --location --retry 3 --retry-delay 2 --continue-at - \
+    --output "$part" "$url"
+  if ! verify_file "$part" "$expected_bytes" "$expected_sha"; then
+    backup="${part}.invalid-$(date +%Y%m%d%H%M%S)-$$"
+    mv -- "$part" "$backup"
+    echo "  CHYBA: stiahnutý súbor nesedí s manifestom; zachovaný ako $backup" >&2
+    return 1
+  fi
+  if [ -f "$target" ]; then
+    backup="${target}.invalid-$(date +%Y%m%d%H%M%S)-$$"
+    mv -- "$target" "$backup"
+    echo "  pôvodný neplatný súbor: $backup"
+  fi
+  mv -- "$part" "$target"
+  echo "  OK: ${target#"$ROOT/"}"
+}
+
+MAP_ARCHIVE=""
+FASTA_ARCHIVE=""
+FASTA_PATH=""
+FASTA_BYTES=""
+FASTA_SHA=""
+BREF_COUNT=0
+
+echo "Manifest: $MANIFEST"
+echo "Referencia: $REF"
+echo "Chromozómy: $CHROMS"
+echo
+
+while IFS=$'\t' read -r kind chromosome relative_path size_bytes sha256 url; do
+  [ "$kind" = "kind" ] && continue
+  [ -z "$kind" ] && continue
+  case "$relative_path" in
+    /*|../*|*/../*) echo "CHYBA: nebezpečná cesta v manifeste: $relative_path" >&2; exit 1 ;;
+  esac
+  target="$REF/$relative_path"
+  case "$kind" in
+    bref3)
+      selected_chromosome "$chromosome" || continue
+      download_verified "$target" "$size_bytes" "$sha256" "$url"
+      BREF_COUNT=$((BREF_COUNT + 1))
+      ;;
+    beagle)
+      download_verified "$target" "$size_bytes" "$sha256" "$url"
+      ;;
+    maps_archive)
+      download_verified "$target" "$size_bytes" "$sha256" "$url"
+      MAP_ARCHIVE="$target"
+      ;;
+    fasta_archive)
+      download_verified "$target" "$size_bytes" "$sha256" "$url"
+      FASTA_ARCHIVE="$target"
+      ;;
+    fasta)
+      FASTA_PATH="$target"
+      FASTA_BYTES="$size_bytes"
+      FASTA_SHA="$sha256"
+      ;;
+    *) echo "CHYBA: neznámy typ v manifeste: $kind" >&2; exit 1 ;;
+  esac
+done < "$MANIFEST"
+
+[ "$BREF_COUNT" -gt 0 ] || { echo "CHYBA: CHROMS nevybralo žiadny panel z manifestu" >&2; exit 1; }
+[ -n "$MAP_ARCHIVE" ] || { echo "CHYBA: manifest nemá maps_archive" >&2; exit 1; }
+[ -n "$FASTA_ARCHIVE" ] || { echo "CHYBA: manifest nemá fasta_archive" >&2; exit 1; }
+[ -n "$FASTA_PATH" ] || { echo "CHYBA: manifest nemá rozbalenú fasta" >&2; exit 1; }
+
+echo
+echo "Genetické mapy"
+if [ "$VERIFY_ONLY" -eq 0 ]; then
+  unzip -oq "$MAP_ARCHIVE" -d "$REF/maps"
 fi
-echo "    -> $REF/human_g1k_v37.fasta"
+for chromosome in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X; do
+  [ -f "$REF/maps/plink.chr${chromosome}.GRCh37.map" ] || {
+    echo "CHYBA: chýba rozbalená mapa chr${chromosome}" >&2
+    exit 1
+  }
+done
+echo "  OK: mapy GRCh37"
 
-echo "HOTOVO. Referencia je v ./$REF/"
-echo "Nastav pred spustenim imputacie:"
-echo "  export BEAGLE_JAR=\$PWD/$REF/beagle.jar"
-echo "  export REF_DIR=\$PWD/$REF/b37.bref3"
-echo "  export MAP_DIR=\$PWD/$REF/maps"
-echo "  export FASTA=\$PWD/$REF/human_g1k_v37.fasta"
+echo
+echo "Referenčná FASTA"
+if verify_file "$FASTA_PATH" "$FASTA_BYTES" "$FASTA_SHA"; then
+  echo "  OK (cache): ${FASTA_PATH#"$ROOT/"}"
+elif [ "$VERIFY_ONLY" -eq 1 ]; then
+  echo "  CHYBA: chýba alebo nesedí checksum: $FASTA_PATH" >&2
+  exit 1
+else
+  fasta_part="${FASTA_PATH}.part"
+  echo "  rozbaľujem: ${FASTA_ARCHIVE#"$ROOT/"}"
+  gzip -cd "$FASTA_ARCHIVE" > "$fasta_part"
+  if ! verify_file "$fasta_part" "$FASTA_BYTES" "$FASTA_SHA"; then
+    echo "CHYBA: rozbalená FASTA nesedí s manifestom: $fasta_part" >&2
+    exit 1
+  fi
+  if [ -f "$FASTA_PATH" ]; then
+    fasta_backup="${FASTA_PATH}.invalid-$(date +%Y%m%d%H%M%S)-$$"
+    mv -- "$FASTA_PATH" "$fasta_backup"
+    echo "  pôvodná neplatná FASTA: $fasta_backup"
+  fi
+  mv -- "$fasta_part" "$FASTA_PATH"
+  echo "  OK: ${FASTA_PATH#"$ROOT/"}"
+fi
+
+if [ "$VERIFY_ONLY" -eq 0 ] && command -v samtools >/dev/null 2>&1; then
+  if [ ! -f "${FASTA_PATH}.fai" ] || [ "$FASTA_PATH" -nt "${FASTA_PATH}.fai" ]; then
+    samtools faidx "$FASTA_PATH"
+  fi
+fi
+
+echo
+if [ "$VERIFY_ONLY" -eq 1 ]; then
+  echo "OVERENÉ. Vybraná referencia zodpovedá manifestu."
+else
+  echo "HOTOVO. Referencia bola stiahnutá a overená podľa manifestu."
+fi
+echo "Nastav pred spustením imputácie:"
+echo "  export BEAGLE_JAR=\"$REF/beagle.jar\""
+echo "  export REF_DIR=\"$REF/b37.bref3\""
+echo "  export MAP_DIR=\"$REF/maps\""
+echo "  export FASTA=\"$FASTA_PATH\""

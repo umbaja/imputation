@@ -32,7 +32,7 @@ Na Windowse sa odporúča WSL2:
 git clone https://github.com/umbaja/imputation.git
 cd imputation
 bash install_tools_root.sh       # raz, so sudo/root oprávnením
-bash setup_reference.sh          # raz; stiahne približne 13 GB
+bash setup_reference.sh          # raz; stiahne a SHA-256 overí referencie
 bash start_app.sh
 ```
 
@@ -111,8 +111,12 @@ docker run --rm -p 8000:8000 \
 - Predispozičné výsledky sú výskumné/informatívne. Klinicky významný nález sa
   musí potvrdiť nezávislým laboratórnym vyšetrením.
 - Referencie Beagle/1000G majú približne 13 GB a spravuje ich
-  `setup_reference.sh`; do Git repozitára nepatria.
+  `setup_reference.sh`; do Git repozitára nepatria. Presné verzie, zdroje,
+  veľkosti a SHA-256 sú pripnuté v `reference_manifest.tsv`. Už stiahnutú
+  referenciu možno bez siete skontrolovať cez
+  `bash setup_reference.sh --verify-only`.
 
 Podrobný návrh komponentov a dátového toku je v
 [ARCHITECTURE.md](ARCHITECTURE.md). Bezpečnostné pravidlá sú v
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](SECURITY.md). Pôvod a správa veľkých externých súborov sú
+popísané v [REFERENCE_DATA.md](REFERENCE_DATA.md).
