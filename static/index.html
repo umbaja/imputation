@@ -105,6 +105,9 @@
 
   /* ---- dávkové spracovanie ---- */
   .card.batch{border:2px solid var(--accent);box-shadow:0 2px 16px rgba(79,70,229,.16)}
+  .card.demo{border:2px solid var(--grn);background:linear-gradient(135deg,#ffffff,#f2fff6)}
+  .card.demo h2 .step{background:linear-gradient(135deg,#1a7f37,#2da44e)}
+  body.demo-mode .full-mode{display:none}
   .card.batch h2 .step{background:linear-gradient(135deg,#4f46e5,#7c3aed);font-size:.9rem}
   button.big{padding:13px 22px;font-size:.98rem;border-radius:10px}
   input.path{width:100%;border:1px solid var(--bd2);border-radius:8px;padding:9px 11px;
@@ -125,7 +128,7 @@
 <header>
   <div class="wrap">
     <div>
-      <h1>◧ GENOME CONVERTER <span id="appver" style="font-size:0.62em;opacity:0.65;font-weight:400">v2.1</span></h1>
+      <h1>◧ GENOME NORMALIZER <span id="appver" style="font-size:0.62em;opacity:0.65;font-weight:400">v2.3</span></h1>
     </div>
     <div id="statuschip" onclick="loadStatus()">⏳ zisťujem stav…</div>
     <div class="sub" id="privacyMode">Normalizácia genetických dát → oddelený sibling dataset + cielená imputácia predispozičného panela.</div>
@@ -133,8 +136,21 @@
 </header>
 <main>
 
+  <!-- Bezpečná syntetická ukážka dostupná aj zdieľanému DEMO účtu -->
+  <div class="card demo" id="demoCard">
+    <h2><span class="step">▶</span> DEMO normalizácie</h2>
+    <div class="hint">Spustí reálnu normalizáciu a kontrolu 561-SNP panela nad zabudovanou
+      <b>syntetickou MyHeritage vzorkou</b>. Dáta nepatria žiadnej osobe. Zdieľané demo
+      zámerne nespúšťa nákladnú Beagle imputáciu.</div>
+    <div class="btns">
+      <button id="demoBtn" class="big" onclick="runDemo()">▶ Spustiť demo analýzu</button>
+      <a class="dl" href="/api/demo-download/input">⬇ demo vstup</a>
+    </div>
+    <div class="out" id="demoOut"></div>
+  </div>
+
   <!-- DÁVKA: celá pipeline jedným tlačidlom -->
-  <div class="card batch">
+  <div class="card batch full-mode">
     <h2><span class="step">🚀</span> Celá pipeline jedným tlačidlom</h2>
     <div class="hint">Vyber ľubovoľný počet vzoriek naraz + jeden SNP panel, zadaj cieľový priečinok a klikni.
       Pre každú vzorku prebehne <b>prevod → oddelenie sibling dát → kontrola panela → cielená imputácia</b> bez ďalších zásahov.
@@ -173,8 +189,8 @@
   </div>
 
   <!-- KROK 1 -->
-  <div class="card">
-    <h2><span class="step">1</span> Prevod do 23andMe formátu</h2>
+  <div class="card full-mode">
+    <h2><span class="step">1</span> Vytvorenie normalizovaného genotypu</h2>
     <div class="hint">Podporované: 23andMe · AncestryDNA · MyHeritage · FamilyTreeDNA · VCF · PLINK (.ped/.map) · Illumina Final Report. Formát rozpozná automaticky.</div>
 
     <div class="drop" id="convDrop">
@@ -190,18 +206,18 @@
     </div>
 
     <div class="btns">
-      <button id="convBtn" onclick="doConvert()" disabled>Previesť do 23andMe</button>
+      <button id="convBtn" onclick="doConvert()" disabled>Vytvoriť normalizovaný genotyp</button>
     </div>
     <div class="out" id="convOut"></div>
   </div>
 
   <!-- KROK 2 -->
-  <div class="card">
+  <div class="card full-mode">
     <h2><span class="step">2</span> Kontrola pokrytia panela</h2>
     <div class="hint">Zisti, koľko lokusov z tvojho panela je vo vzorke reálne zavolaných.</div>
     <div class="row">
       <div>
-        <label>Prevedený 23andMe súbor</label>
+        <label>Normalizovaný genotyp</label>
         <div class="drop" id="pcSampleDrop"><span class="ic">🧬</span><span class="dztext">vzorka (.txt)</span><input type="file" id="pcSample"></div>
       </div>
       <div>
@@ -217,7 +233,7 @@
   </div>
 
   <!-- KROK 3 -->
-  <div class="card">
+  <div class="card full-mode">
     <h2><span class="step">3</span> Cielená imputácia</h2>
     <div class="hint">Odhad okien okolo cieľových lokusov funguje offline. Reálna imputácia (Beagle + 1000G) potrebuje nastavenú referenciu — pozri stav hore.</div>
     <label>Cieľové lokusy (CSV: rsid,chromosome,position)</label>
@@ -228,7 +244,7 @@
     <hr class="sep">
     <div class="muted" style="margin-bottom:6px">Reálna imputácia:</div>
     <div class="row">
-      <div><label>Prevedený 23andMe súbor</label>
+      <div><label>Normalizovaný genotyp</label>
         <div class="drop" id="impSampleDrop"><span class="ic">🧬</span><span class="dztext">vzorka</span><input type="file" id="impSample"></div></div>
       <div><label>Panel status CSV (z kroku 2)</label>
         <div class="drop" id="impStatusDrop"><span class="ic">📊</span><span class="dztext">panel status</span><input type="file" id="impStatus"></div></div>
@@ -246,23 +262,23 @@
   </div>
 
   <!-- KROK 4 -->
-  <div class="card">
-    <h2><span class="step">4</span> Doplniť imputované do 23andMe súboru</h2>
-    <div class="hint">Vezme prevedený 23andMe súbor z kroku 1 a nalepí naň imputované genotypy z kroku 3: no-call prepíše, chýbajúce (absent) doplní, namerané nechá. Výstup je kompletný 23andMe <b>.txt</b>.</div>
+  <div class="card full-mode">
+    <h2><span class="step">4</span> Vytvoriť predispozičný normalizovaný genotyp</h2>
+    <div class="hint">Vezme normalizovaný genotyp z kroku 1 a doplní doň genotypy z kroku 3: no-call prepíše, chýbajúce (absent) doplní a namerané ponechá bez zmeny. Výstup je predispozičný normalizovaný <b>.txt</b> súbor.</div>
     <div class="row">
-      <div><label>Prevedený 23andMe súbor (krok 1)</label>
+      <div><label>Normalizovaný genotyp (krok 1)</label>
         <div class="drop" id="mgSampleDrop"><span class="ic">🧬</span><span class="dztext">vzorka (.txt)</span><input type="file" id="mgSample"></div></div>
       <div><label>Finálny panel z kroku 3 (…_panel_final.csv)</label>
         <div class="drop" id="mgPanelDrop"><span class="ic">🧩</span><span class="dztext">panel_final.csv</span><input type="file" id="mgPanel"></div></div>
     </div>
     <label>Min. spoľahlivosť imputácie (max GP): <input type="number" id="mgConf" value="0.9" step="0.05" min="0" max="1"></label>
     <div class="hint" style="margin-top:2px">Predvolene sa prijmú iba odhady s max(GP) ≥ 0,9.</div>
-    <div class="btns"><button id="mgBtn" onclick="doMerge()" disabled>Vytvoriť kompletný 23andMe</button></div>
+    <div class="btns"><button id="mgBtn" onclick="doMerge()" disabled>Vytvoriť predispozičný výstup</button></div>
     <div class="out" id="mgOut"></div>
   </div>
 
   <!-- LOG -->
-  <div class="card">
+  <div class="card full-mode">
     <details class="log">
       <summary>Log (na ladenie)</summary>
       <div class="btns"><button class="ghost" onclick="loadLog()">Obnoviť log</button></div>
@@ -312,6 +328,38 @@ function makeZone(zoneId,inputId,onFile){
 function injectFile(inputId,zoneId,blob,name){
   const dt=new DataTransfer();dt.items.add(new File([blob],name,{type:'text/plain'}));
   $(inputId).files=dt.files;setZone($(zoneId),$(inputId));
+}
+
+/* ---------- syntetické DEMO ---------- */
+async function runDemo(){
+  const btn=$('demoBtn');
+  loading(btn,true,'analyzujem demo…');
+  show($('demoOut'),'<span class="muted">Normalizujem syntetickú vzorku a kontrolujem panel…</span>');
+  try{
+    const d=await post('/api/demo-run',new FormData());
+    const rows=(d.preview||[]).map(c=>{
+      const gt=c[3]==='--'?'<span class="nc">--</span>':esc(c[3]);
+      return `<tr><td>${esc(c[0])}</td><td>${esc(c[1])}</td><td>${esc(c[2])}</td><td>${gt}</td></tr>`;
+    }).join('');
+    const links=d.downloads||{};
+    show($('demoOut'),
+      `<div class="fmt">zdroj: ${esc(d.source_format)} · syntetické dáta</div>
+       <div class="stats">
+         <div class="stat b"><div class="v">${d.measured_variants}</div><div class="k">variantov</div></div>
+         <div class="stat g"><div class="v">${d.measured_called}</div><div class="k">zavolaných</div></div>
+         <div class="stat a"><div class="v">${d.panel_measured}/${d.panel_markers}</div><div class="k">panel · ${d.coverage_pct}%</div></div>
+         <div class="stat"><div class="v">${d.panel_missing_after}</div><div class="k">chýba</div></div>
+       </div>
+       <div class="warns"><div>ℹ ${esc(d.note)}</div></div>
+       ${rows?`<div class="previewwrap"><table class="prev"><thead><tr><th>rsid</th><th>chr</th><th>pozícia</th><th>genotyp</th></tr></thead><tbody>${rows}</tbody></table></div>`:''}
+       <div class="dlbar">
+         <a class="dl" href="${links.normalized}">⬇ normalizovaný genotyp</a>
+         <a class="dl" href="${links.sibling}">⬇ sibling — iba namerané</a>
+         <a class="dl" href="${links.panel}">⬇ predispozičný panel CSV</a>
+         <a class="dl" href="${links.report}">⬇ demo správa JSON</a>
+       </div>`);
+  }catch(e){show($('demoOut'),`<div class="err">Demo analýza zlyhala: ${esc(e.message)}</div>`);}
+  finally{loading(btn,false);}
 }
 
 /* ---------- DÁVKA: celá pipeline jedným tlačidlom ---------- */
@@ -530,7 +578,7 @@ async function doPanel(){
        </div>
        <label style="margin-top:12px">pokrytie: <b>${d.coverage_pct}%</b></label>
        <div class="bar"><span style="width:${d.coverage_pct}%"></span></div>
-       <div class="muted">match: rsID ${d.matched_by_rsid} · pozícia ${d.matched_by_pos}${d.enriched?` · <span style="color:var(--grn)">z 23andMe ref: +${d.enriched}</span>`:''}${d.enriched_online?` · <span style="color:var(--blu)">online (Ensembl): +${d.enriched_online}</span>`:''}</div>
+       <div class="muted">match: rsID ${d.matched_by_rsid} · pozícia ${d.matched_by_pos}${d.enriched?` · <span style="color:var(--grn)">z lokálnej ID referencie: +${d.enriched}</span>`:''}${d.enriched_online?` · <span style="color:var(--blu)">online (Ensembl): +${d.enriched_online}</span>`:''}</div>
        <div class="dlbar">
          <a class="dl" href="${d.download_all}">⬇ prehľad</a>
          <a class="dl" style="background:var(--blu)" href="${d.download_missing}">⬇ chýbajúce</a>
@@ -622,7 +670,7 @@ function pollImpute(job){
   tick();
 }
 
-/* ---------- KROK 4: doplnenie imputovaneho do 23andMe ---------- */
+/* ---------- KROK 4: predispozicny normalizovany vystup ---------- */
 function refreshMergeBtn(){$('mgBtn').disabled=!($('mgSample').files[0]&&$('mgPanel').files[0]);}
 makeZone('mgSampleDrop','mgSample',refreshMergeBtn);
 makeZone('mgPanelDrop','mgPanel',refreshMergeBtn);
@@ -655,18 +703,27 @@ async function loadStatus(){
   try{const s=await (await fetch('/api/status')).json();
     if(s.version){const av=$('appver');if(av)av.textContent='v'+s.version;}
     imputeReady=!!s.imputation_ready;refreshImpBtns();
-    if(s.public_mode){
+    if(s.account_role==='demo'){
+      document.body.classList.add('demo-mode');
+      $('privacyMode').textContent='DEMO účet — spracúva iba zabudovanú syntetickú vzorku; nahrávanie vlastných dát je zablokované.';
+      $('statuschip').title='Obmedzený bezpečný DEMO režim';
+    }else{
+      document.body.classList.remove('demo-mode');
+    }
+    if(s.public_mode&&s.account_role!=='demo'){
       $('privacyMode').textContent=`Chránené serverové spracovanie. Nahrané súbory sa automaticky mažú približne po ${s.retention_hours} h.`;
       $('bOutDirGroup').style.display='none';
       $('bBamGroup').style.display='none';
-    }else{
+    }else if(!s.public_mode){
       $('privacyMode').textContent='Lokálne spracovanie — genetické dáta neopúšťajú tento počítač.';
     }
     const chip=$('statuschip');
-    if(s.imputation_ready){chip.innerHTML='✅ imputácia pripravená';chip.style.color='#7ee787';}
-    else{chip.innerHTML='⚙️ prevod OK · imputácia: nastav referenciu';chip.style.color='#e3b341';}
-    chip.title=`Python ${s.python} · Java ${s.java?'áno':'nie'} · Beagle ${s.beagle_jar?'áno':'nie'} · `+
-               `FASTA ${s.fasta?'áno':'nie'} · bref3: ${s.bref3_files} · ID ref ${s.id_reference?'áno':'nie'}`;
+    if(s.account_role==='demo'){chip.innerHTML='✅ DEMO pripravené';chip.style.color='#7ee787';}
+    else if(s.imputation_ready){chip.innerHTML='✅ imputácia pripravená';chip.style.color='#7ee787';}
+    else{chip.innerHTML='⚙️ normalizácia OK · imputácia: nastav referenciu';chip.style.color='#e3b341';}
+    chip.title=s.account_role==='demo'?'Obmedzený bezpečný DEMO režim':
+      `Python ${s.python} · Java ${s.java?'áno':'nie'} · Beagle ${s.beagle_jar?'áno':'nie'} · `+
+      `FASTA ${s.fasta?'áno':'nie'} · bref3: ${s.bref3_files} · ID ref ${s.id_reference?'áno':'nie'}`;
     const w=s.wgs||{}, wh=$('wgsHint');
     if(wh){
       if(w.wgs_ready&&w.samtools&&w.template_hg38)

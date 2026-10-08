@@ -1,6 +1,7 @@
 # Railway nasadenie
 
-Toto nasadenie je určené pre jednu heslom chránenú inštanciu. Genetické
+Toto nasadenie je určené pre jednu heslom chránenú inštanciu s vlastníckym a
+voliteľným obmedzeným DEMO účtom. Genetické
 vstupy sa spracujú v kontajneri, výsledky sa dajú stiahnuť a pracovné súbory
 sa automaticky mažú. Imputácia beží vždy iba pre jednu úlohu naraz.
 
@@ -26,6 +27,8 @@ Odporúčaná minimálna pamäť pre jednu imputáciu je 4 GB. Premenné `JOBS=1
    PUBLIC_MODE=1
    APP_USERNAME=<zvolené používateľské meno>
    APP_PASSWORD=<dlhé náhodné heslo>
+   DEMO_USERNAME=demo
+   DEMO_PASSWORD=genome-demo-2026
    BOOTSTRAP_REFERENCE=1
    REFERENCE_DIR=/app/ref
    BEAGLE_JAR=/app/ref/beagle.jar
@@ -48,6 +51,10 @@ Odporúčaná minimálna pamäť pre jednu imputáciu je 4 GB. Premenné `JOBS=1
 6. Po úspešnom health checku `/healthz` zvoľte **Settings → Networking →
    Generate Domain**.
 7. Otvorte doménu a prihláste sa hodnotami `APP_USERNAME` a `APP_PASSWORD`.
+
+Zdieľané konto `DEMO_USERNAME` môže spustiť iba zabudovanú syntetickú ukážku.
+Middleware mu blokuje uploady, všeobecné downloady, logy aj výpočtovo nákladnú
+imputáciu. Ak DEMO účet nechcete, obe premenné `DEMO_*` vynechajte.
 
 `APP_PASSWORD` nevkladajte do Git repozitára ani do screenshotov. Railway
 premenná je jediným miestom, kde má byť uložená.

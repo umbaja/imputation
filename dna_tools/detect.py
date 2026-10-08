@@ -5,7 +5,7 @@ detect.py
 Automaticka detekcia formatu surovych genetickych dat.
 
 DOLEZITE: detekcia je STRUKTURNA (podla oddelovaca a stlpcov dat), nie podla
-volnych klucovych slov v komentaroch. Preto sa napr. prevedeny 23andMe subor,
+voľných kľúčových slov v komentároch. Preto sa napr. normalizovaný štvorstĺpcový súbor,
 ktory v hlavicke spomina zdrojovy format, spravne rozpozna ako 23andMe (tab,
 4 stlpce), a nie ako MyHeritage.
 

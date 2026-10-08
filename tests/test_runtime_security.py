@@ -53,6 +53,29 @@ class RuntimeSecurityTests(unittest.TestCase):
             self.assertFalse(runtime_security.basic_credentials_valid("Basic invalid"))
             self.assertFalse(runtime_security.basic_credentials_valid(None))
 
+    def test_demo_auth_has_distinct_role(self):
+        token = base64.b64encode(b"demo:demo-secret").decode("ascii")
+        environment = {
+            "APP_USERNAME": "owner",
+            "APP_PASSWORD": "owner-secret",
+            "DEMO_USERNAME": "demo",
+            "DEMO_PASSWORD": "demo-secret",
+        }
+        with mock.patch.object(runtime_security, "PUBLIC_MODE", True), \
+                mock.patch.dict(os.environ, environment, clear=True):
+            self.assertEqual(runtime_security.basic_auth_role(f"Basic {token}"), "demo")
+
+    def test_partial_demo_config_fails_closed(self):
+        environment = {
+            "APP_USERNAME": "owner",
+            "APP_PASSWORD": "owner-secret",
+            "DEMO_USERNAME": "demo",
+        }
+        with mock.patch.object(runtime_security, "PUBLIC_MODE", True), \
+                mock.patch.dict(os.environ, environment, clear=True):
+            with self.assertRaises(RuntimeError):
+                runtime_security.validate_public_config()
+
     def test_public_mode_fails_closed_without_credentials(self):
         with mock.patch.object(runtime_security, "PUBLIC_MODE", True), \
                 mock.patch.dict(os.environ, {}, clear=True):

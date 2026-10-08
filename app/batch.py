@@ -2,12 +2,12 @@
 batch.py — DAVKOVE spracovanie: jedno tlacidlo spusti celu pipeline pre N vzoriek.
 
 Pre kazdu vstupnu vzorku bezi:
-    1) prevod do 23andMe formatu (vratane Illumina relabel + rs-only anotacie)
+    1) prevod do normalizovaneho genotypu (vratane Illumina relabel + rs-only anotacie)
     2) kontrola pokrytia panela  -> panel_all.csv / ciele na imputaciu
     3) cielena imputacia (targeted_impute.sh, Beagle + 1000G)  [ak nieco chyba]
-    4) doplnenie imputovanych genotypov spat do 23andMe suboru
+    4) doplnenie imputovanych genotypov do predispozicneho normalizovaneho suboru
 
-Vysledny KOMPLETNY 23andMe subor sa skopiruje do cieloveho priecinka,
+Vysledny predispozicny normalizovany subor sa skopiruje do cieloveho priecinka,
 ktory pouzivatel zada v UI (akceptuje aj Windows cestu C:\\... -> /mnt/c/...).
 
 Vzorky bezia SEKVENCNE — targeted_impute.sh pouziva zdielany scratch adresar
@@ -234,7 +234,7 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
 
     # --- 1) prevod -----------------------------------------------------------
     _item_set(item, stage="prevod", stage_no=1, status="running")
-    conv = WORK / f"{prefix}_{stem}_23andme.txt"
+    conv = WORK / f"{prefix}_{stem}_normalized_genotype.txt"
 
     wes = _wes_plan(src, item["name"], job)
     if wes is not None:
@@ -269,7 +269,7 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
 
     # Sibling/IBD výstup je nemenná kópia priamo nameraných genotypov. Nikdy
     # doň neskôr nepridávame Beagle odhady.
-    sibling = WORK / f"{prefix}_{stem}_sibling_measured_23andme.txt"
+    sibling = WORK / f"{prefix}_{stem}_sibling_measured_normalized.txt"
     shutil.copyfile(conv, sibling)
 
     # --- 2) panel-check ------------------------------------------------------
@@ -303,9 +303,9 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
         shutil.copyfile(generated_panel, panel_final)
         _item_set(item, panel_final=panel_final.name)
 
-        # --- 4) doplnenie spat do 23andMe -----------------------------------
-        _item_set(item, stage="doplnenie do 23andMe", stage_no=4)
-        completed = WORK / f"{prefix}_{stem}_kompletny_23andme.txt"
+        # --- 4) doplnenie do predispozicneho normalizovaneho vystupu --------
+        _item_set(item, stage="doplnenie do normalizovaného výstupu", stage_no=4)
+        completed = WORK / f"{prefix}_{stem}_predisposition_normalized.txt"
         stats = merge_imputed_into_23andme(str(conv), str(panel_final), str(completed),
                                            min_conf=job["opts"]["min_conf"])
         _item_set(item, replaced_nocall=stats.get("replaced_nocall", 0),
@@ -335,8 +335,8 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
     # --- 5) ulozenie do cieloveho priecinka ---------------------------------
     _item_set(item, stage="ukladám výsledok", stage_no=5)
     out_dir.mkdir(parents=True, exist_ok=True)
-    sibling_dest = out_dir / f"{stem}_sibling_measured_23andme.txt"
-    predisposition_dest = out_dir / f"{stem}_predisposition_23andme.txt"
+    sibling_dest = out_dir / f"{stem}_sibling_measured_normalized.txt"
+    predisposition_dest = out_dir / f"{stem}_predisposition_normalized.txt"
     panel_dest = out_dir / f"{stem}_predisposition_panel.csv"
     shutil.copyfile(sibling, sibling_dest)
     shutil.copyfile(completed, predisposition_dest)

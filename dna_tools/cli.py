@@ -196,13 +196,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Namapuj vzorku na marker set sablony (napr. 23andMe v5); chybajuce -> no-call.")
     psc.add_argument("sample", help="Vstupna vzorka (napr. MyHeritage).")
     psc.add_argument("--template", required=True, help="Sablona marker setu (napr. 23andMe v5 subor).")
-    psc.add_argument("-o", "--output", required=True, help="Vystupny 23andMe subor.")
+    psc.add_argument("-o", "--output", required=True, help="Výstupný normalizovaný genotyp.")
     psc.add_argument("--no-sort-alleles", action="store_true", help="Nezoradovat alely.")
     psc.set_defaults(func=_cmd_scaffold)
 
     ppc = sub.add_parser("panel-check",
         help="Overi pokrytie cieloveho panelu lokusov (~1000 pozicii) v subore.")
-    ppc.add_argument("sample", help="Genotypovy subor (napr. prevedeny 23andMe).")
+    ppc.add_argument("sample", help="Normalizovaný alebo podporovaný zdrojový genotypový súbor.")
     ppc.add_argument("--panel", required=True, help="Panel: zoznam rsID alebo CSV/TSV (rsid/chrom/pos/effect_allele).")
     ppc.add_argument("--out-missing", help="CSV s chybajucimi/no-call lokusmi (kandidati na imputaciu).")
     ppc.add_argument("--out-all", help="CSV s prehladom vsetkych lokusov a ich stavom.")
@@ -222,7 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ptv = sub.add_parser("to-vcf",
         help="Prevedie 23andMe -> VCF. Rezim --fasta (informativne) alebo --sites-vcf (aj hom-ref).")
-    ptv.add_argument("input", help="23andMe subor.")
+    ptv.add_argument("input", help="Normalizovaný genotypový súbor.")
     ptv.add_argument("--fasta", help="Referencna FASTA (rezim A: REF z FASTA).")
     ptv.add_argument("--sites-vcf", help="VCF s panelovymi sites (rezim B: aj hom-ref, viac kotiev).")
     ptv.add_argument("--chrom", help="Obmedz na chromozom(y), oddelene ciarkou.")

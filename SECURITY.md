@@ -11,6 +11,8 @@ Genotypové súbory sú citlivé osobné a zdravotné údaje.
 - Verejné nasadenie vyžaduje autentifikáciu, TLS, šifrované úložisko, audit,
   časovo obmedzenú retenciu a právny základ na spracovanie genetických údajov.
 - Výsledky predispozícií nie sú klinická diagnóza.
+- Zdieľaný DEMO účet spracúva iba verzovaný syntetický súbor. Middleware mu
+  blokuje vlastné uploady, všeobecné downloady, logy a imputáciu.
 
 Bezpečnostnú chybu nezverejňujte spolu s reálnymi genotypovými dátami. Pošlite
 iba minimálny syntetický reprodukčný príklad.

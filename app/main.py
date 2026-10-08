@@ -26,7 +26,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -39,29 +39,48 @@ from dna_tools.parsers import parse_file, relabel_from_reference   # noqa: E402
 from dna_tools.convert import write_23andme, merge_imputed_into_23andme   # noqa: E402
 from dna_tools.panel import check_panel, annotate_by_rsid     # noqa: E402
 from dna_tools.targeted_impute import build_windows           # noqa: E402
+from dna_tools.analysis_prep import prepare_for_analyses      # noqa: E402
 from dna_tools import wgs                                     # noqa: E402
 from app.runtime_security import (                            # noqa: E402
     JOB_LOCK,
     MAX_REQUEST_MB,
     PUBLIC_MODE,
     RETENTION_HOURS,
-    basic_credentials_valid,
+    basic_auth_role,
     prune_runtime_files,
     save_upload_limited,
     validate_public_config,
 )
 
-APP_VERSION = "2.2"
+APP_VERSION = "2.3"
 
 WORK = ROOT / "work"
 LOGS = ROOT / "logs"
 DATA = ROOT / "data"
 STATIC = ROOT / "static"
+DEMO = ROOT / "demo"
 for d in (WORK, LOGS, DATA):
     d.mkdir(exist_ok=True)
 
 LOG_FILE = LOGS / "app.log"
 IMPUTE_LOG = LOGS / "impute.log"   # zivy vypis behu imputacie (tail -f)
+DEMO_LOCK = threading.Lock()
+
+DEMO_ALLOWED_PATHS = {
+    "/",
+    "/api/status",
+    "/api/demo-run",
+}
+
+
+def demo_path_allowed(path: str) -> bool:
+    """Return whether the shared DEMO role may access an HTTP path."""
+
+    return (
+        path in DEMO_ALLOWED_PATHS
+        or path.startswith("/api/demo-download/")
+        or path.startswith("/static/")
+    )
 
 
 def log(msg: str) -> None:
@@ -80,20 +99,28 @@ app = FastAPI(
     redoc_url=None if PUBLIC_MODE else "/redoc",
     openapi_url=None if PUBLIC_MODE else "/openapi.json",
 )
-log(f"=== Genome Converter v{APP_VERSION} startuje ===")
+log(f"=== Genome Normalizer v{APP_VERSION} startuje ===")
 
 
 @app.middleware("http")
 async def hosted_security(request, call_next):
     """Require credentials in public mode and add conservative browser headers."""
 
+    role = "owner"
     if PUBLIC_MODE and request.url.path != "/healthz":
-        if not basic_credentials_valid(request.headers.get("authorization")):
+        role = basic_auth_role(request.headers.get("authorization"))
+        if role is None:
             return PlainTextResponse(
                 "Vyžaduje sa prihlásenie.",
                 status_code=401,
                 headers={"WWW-Authenticate": 'Basic realm="Genome Normalizer"'},
             )
+        if role == "demo" and not demo_path_allowed(request.url.path):
+            return PlainTextResponse(
+                "DEMO účet povoľuje iba zabudovanú syntetickú ukážku.",
+                status_code=403,
+            )
+    request.state.account_role = role
     content_length = request.headers.get("content-length")
     if request.method in {"POST", "PUT", "PATCH"} and content_length:
         try:
@@ -158,11 +185,11 @@ def index():
     idx = STATIC / "index.html"
     if idx.exists():
         return idx.read_text(encoding="utf-8")
-    return "<h1>Genome Converter</h1><p>static/index.html chyba.</p>"
+    return "<h1>Genome Normalizer</h1><p>static/index.html chýba.</p>"
 
 
 @app.get("/api/status")
-def status():
+def status(request: Request):
     """Zisti dostupnost nastrojov a referencie (na imputaciu)."""
     ref_dir = os.environ.get("REF_DIR", "")
     beagle = os.environ.get("BEAGLE_JAR", "")
@@ -173,6 +200,8 @@ def status():
     return {
         "version": APP_VERSION,
         "public_mode": PUBLIC_MODE,
+        "account_role": getattr(request.state, "account_role", "owner"),
+        "demo_available": (DEMO / "demo_myheritage_raw.csv").exists(),
         "retention_hours": RETENTION_HOURS,
         "default_panel": (DATA / "panel_full_561.csv").exists(),
         "python": sys.version.split()[0],
@@ -207,16 +236,16 @@ async def api_convert(file: UploadFile = File(...),
     path = _save_upload(file)
     try:
         data = parse_file(str(path))
-        # Illumina: prevezmi 23andMe oznacenie podla pozicie (namiesto GSA nazvov)
+        # Illumina: prevezmi kanonicke oznacenie podla lokalnej pozicnej referencie.
         if data.source_format == "illumina_final_report":
             id_ref = DATA / "id_position_reference_v3v4v5.tsv.gz"
             if id_ref.exists():
                 n = relabel_from_reference(data, str(id_ref))
                 data.warnings.append(
-                    "Illumina: %d markerov preznacenych podla 23andMe referencie (podla pozicie); "
+                    "Illumina: %d markerov preznacenych podla lokalnej ID referencie (podla pozicie); "
                     "zvysok ponechany s povodnym oznacenim." % n)
             # rs-only sondy (chr 0, ale maju rsID) — dopln suradnice podla rs cisla:
-            # lokalne z 23andMe referencie, a ak online=True, zvysok cez Ensembl GRCh37
+            # lokalne z ID referencie, a ak online=True, zvysok cez Ensembl GRCh37
             na = annotate_by_rsid(data, str(id_ref) if id_ref.exists() else None, online=online)
             if na:
                 data.warnings.append(
@@ -232,7 +261,7 @@ async def api_convert(file: UploadFile = File(...),
             elif build == "unknown":
                 data.warnings.insert(0,
                     "Build tohto VCF sa neda urcit z hlavicky — over, ze su suradnice v GRCh37.")
-        out = WORK / (path.stem + "_23andme.txt")
+        out = WORK / (path.stem + "_normalized_genotype.txt")
         write_23andme(data, str(out), drop_no_call=drop_no_call, keep_non_rs=not only_rs)
         log(f"convert: {path.name} ({data.source_format}) -> {out.name} "
             f"[{data.n_variants} variantov, {data.n_called} zavolanych]")
@@ -372,7 +401,17 @@ async def api_impute_run(sample: UploadFile = File(...),
                          dr2_min: float = Form(0.9),
                          dedup_by: str = Form("position")):
     """Spusti cielenu imputaciu na pozadi a vrati job_id (progres cez /api/impute-progress)."""
-    st = status()
+    st = {
+        "imputation_ready": bool(
+            _which("java")
+            and os.environ.get("BEAGLE_JAR")
+            and Path(os.environ.get("BEAGLE_JAR", "x")).exists()
+            and os.environ.get("REF_DIR")
+            and Path(os.environ.get("REF_DIR", "x")).is_dir()
+            and os.environ.get("FASTA")
+            and Path(os.environ.get("FASTA", "x")).exists()
+        )
+    }
     if not st["imputation_ready"]:
         raise HTTPException(400, "Imputacia nie je pripravena: chyba java/beagle/panel/FASTA. "
                                  "Nastav BEAGLE_JAR, REF_DIR, FASTA a stiahni panel (setup_reference.sh).")
@@ -433,10 +472,10 @@ def api_impute_progress(job_id: str):
 async def api_merge_final(sample: UploadFile = File(...),
                           panel_final: UploadFile = File(...),
                           min_conf: float = Form(0.0)):
-    """Krok 4: nalepi imputovane genotypy (panel_final.csv) na 23andMe subor z Kroku 1."""
+    """Krok 4: doplní imputované genotypy do normalizovaného súboru z kroku 1."""
     sp = _save_upload(sample)
     pf = _save_upload(panel_final)
-    out = WORK / (sp.stem + "_completed_23andme.txt")
+    out = WORK / (sp.stem + "_predisposition_normalized.txt")
     try:
         stats = merge_imputed_into_23andme(str(sp), str(pf), str(out), min_conf=min_conf)
         log(f"merge-final: {sp.name} + {pf.name} -> {out.name} "
@@ -445,6 +484,104 @@ async def api_merge_final(sample: UploadFile = File(...),
     except Exception as e:  # noqa: BLE001
         log(f"ERROR merge-final: {e}")
         raise HTTPException(500, str(e))
+
+
+def _demo_downloads() -> dict[str, tuple[Path, str]]:
+    demo_work = WORK / "demo"
+    return {
+        "input": (DEMO / "demo_myheritage_raw.csv", "demo_myheritage_raw.csv"),
+        "normalized": (demo_work / "demo_normalized_genotype.txt", "demo_normalized_genotype.txt"),
+        "sibling": (demo_work / "demo_sibling_measured_normalized.txt", "demo_sibling_measured_normalized.txt"),
+        "panel": (demo_work / "demo_predisposition_panel.csv", "demo_predisposition_panel.csv"),
+        "report": (demo_work / "demo_analysis_report.json", "demo_analysis_report.json"),
+    }
+
+
+@app.post("/api/demo-run")
+def api_demo_run():
+    """Run the real lightweight normalization/QC path on a synthetic sample."""
+
+    source = DEMO / "demo_myheritage_raw.csv"
+    if not source.is_file():
+        raise HTTPException(503, "Demo vzorka nie je v nasadení dostupná.")
+    with DEMO_LOCK:
+        demo_work = WORK / "demo"
+        demo_work.mkdir(parents=True, exist_ok=True)
+        try:
+            result = prepare_for_analyses(
+                str(source),
+                str(demo_work),
+                panel_path=str(DATA / "panel_full_561.csv"),
+                id_reference_path=str(DATA / "id_position_reference_v3v4v5.tsv.gz"),
+                online_annotation=False,
+                run_imputation=False,
+            )
+            normalized = demo_work / "demo_normalized_genotype.txt"
+            sibling = demo_work / "demo_sibling_measured_normalized.txt"
+            panel = demo_work / "demo_predisposition_panel.csv"
+            shutil.copyfile(result.normalized_dataset, normalized)
+            shutil.copyfile(result.sibling_dataset, sibling)
+            shutil.copyfile(result.predisposition_panel, panel)
+
+            preview = []
+            with normalized.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    if line.startswith("#") or not line.strip():
+                        continue
+                    preview.append(line.rstrip("\n").split("\t"))
+                    if len(preview) == 10:
+                        break
+
+            demo_report = {
+                "demo": True,
+                "synthetic_data": True,
+                "source_file": source.name,
+                "source_format": result.source_format,
+                "reference_build": "GRCh37",
+                "normalized_schema": "rsid, chromosome, position, genotype; plus strand",
+                "measured_variants": result.measured_variants,
+                "measured_called": result.measured_called,
+                "sibling_markers": result.sibling_markers,
+                "sibling_contains_imputed_genotypes": False,
+                "panel_markers": result.panel_markers,
+                "panel_measured": result.panel_measured,
+                "panel_imputed": 0,
+                "panel_missing_after": result.panel_missing_after,
+                "imputation_run": False,
+                "note": (
+                    "DEMO používa syntetickú vzorku a reálnu normalizáciu s panelovou kontrolou. "
+                    "Nákladná Beagle imputácia je pre zdieľané demo konto zámerne vypnutá."
+                ),
+            }
+            report_path = demo_work / "demo_analysis_report.json"
+            report_path.write_text(
+                json.dumps(demo_report, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            log("demo-run: syntetická MyHeritage vzorka spracovaná")
+            return {
+                **demo_report,
+                "coverage_pct": round(
+                    100 * result.panel_measured / result.panel_markers, 1
+                ) if result.panel_markers else 0.0,
+                "preview": preview,
+                "downloads": {
+                    key: f"/api/demo-download/{key}" for key in _demo_downloads()
+                },
+            }
+        except Exception as exc:  # noqa: BLE001
+            log(f"ERROR demo-run: {exc}")
+            raise HTTPException(500, f"Demo analýza zlyhala: {exc}") from exc
+
+
+@app.get("/api/demo-download/{kind}")
+def demo_download(kind: str):
+    entry = _demo_downloads().get(kind)
+    if entry is None:
+        raise HTTPException(404, "Neznámy demo výstup.")
+    path, filename = entry
+    if not path.is_file():
+        raise HTTPException(404, "Najprv spustite demo analýzu.")
+    return FileResponse(str(path), filename=filename)
 
 
 @app.get("/api/download/{name}")

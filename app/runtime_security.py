@@ -41,25 +41,45 @@ def validate_public_config() -> None:
         raise RuntimeError(
             "PUBLIC_MODE=1 vyžaduje Railway secrets: " + ", ".join(missing)
         )
+    demo_values = [os.environ.get("DEMO_USERNAME"), os.environ.get("DEMO_PASSWORD")]
+    if any(demo_values) and not all(demo_values):
+        raise RuntimeError(
+            "DEMO účet vyžaduje obe premenné: DEMO_USERNAME a DEMO_PASSWORD"
+        )
 
 
-def basic_credentials_valid(authorization: Optional[str]) -> bool:
-    """Constant-time validation of an HTTP Basic Authorization header."""
+def basic_auth_role(authorization: Optional[str]) -> Optional[str]:
+    """Return ``owner`` or ``demo`` after constant-time Basic Auth validation."""
 
     if not PUBLIC_MODE:
-        return True
+        return "owner"
     if not authorization or not authorization.startswith("Basic "):
-        return False
+        return None
     try:
         raw = base64.b64decode(authorization[6:], validate=True).decode("utf-8")
         username, password = raw.split(":", 1)
     except (ValueError, UnicodeDecodeError):
-        return False
+        return None
     expected_user = os.environ.get("APP_USERNAME", "")
     expected_password = os.environ.get("APP_PASSWORD", "")
-    return secrets.compare_digest(username, expected_user) and secrets.compare_digest(
+    if secrets.compare_digest(username, expected_user) and secrets.compare_digest(
         password, expected_password
-    )
+    ):
+        return "owner"
+    demo_user = os.environ.get("DEMO_USERNAME", "")
+    demo_password = os.environ.get("DEMO_PASSWORD", "")
+    if demo_user and demo_password:
+        if secrets.compare_digest(username, demo_user) and secrets.compare_digest(
+            password, demo_password
+        ):
+            return "demo"
+    return None
+
+
+def basic_credentials_valid(authorization: Optional[str]) -> bool:
+    """Backward-compatible boolean wrapper used by callers and tests."""
+
+    return basic_auth_role(authorization) is not None
 
 
 def save_upload_limited(

@@ -70,8 +70,8 @@ markerový set, GP filter a porovnanie na známych príbuzenských pároch.
 
 ## Výstupy jedného behu
 
-- `*.normalized_grch37_23andme.txt` — kanonická reprezentácia vstupu;
-- `*.sibling_23andme_v5.txt` — iba pri dodanej presnej v5 šablóne;
+- `*.normalized_grch37.txt` — kanonická normalizovaná reprezentácia vstupu;
+- `*.sibling_normalized_v5.txt` — iba pri dodanej presnej v5 markerovej šablóne;
 - `*.predisposition_status.csv` — stav všetkých panelových SNP;
 - `*.predisposition_missing.csv` — kandidáti na imputáciu;
 - `*.predisposition_panel.csv` — merané a kvalitné imputované výsledky;

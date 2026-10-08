@@ -12,7 +12,7 @@ set -euo pipefail
 export LC_ALL=C
 export LANG=C
 
-SAMPLE="${1:?vstupny 23andMe subor}"
+SAMPLE="${1:?vstupny normalizovany genotypovy subor}"
 TARGETS="${2:?CSV s cielmi (rsid,chromosome,position)}"
 STATUS="${3:?panel-check --out-all CSV}"
 OUT="${4:-targeted}"

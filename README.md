@@ -1,14 +1,28 @@
 # Genome Normalizer
 
-Lokálny systém na spracovanie genotypových dát z rôznych čipových platforiem.
-Jednu vzorku normalizuje do spoločnej reprezentácie GRCh37/23andMe a vytvorí
+Systém na spracovanie genotypových dát z rôznych čipových platforiem.
+Jednu vzorku prevedie do spoločného normalizovaného genotypu (GRCh37, plus
+vlákno, stĺpce `rsid/chromosome/position/genotype`) a vytvorí
 dva oddelené výstupy:
 
 1. **sibling/IBD dataset** — iba priamo namerané autosomálne genotypy;
 2. **predispozičný panel** — 561 cieľových SNP, pričom chýbajúce lokusy možno
    cielene imputovať pomocou Beagle a referencie 1000 Genomes.
 
-Genetické dáta sa štandardne spracúvajú iba na lokálnom počítači.
+Genetické dáta možno spracovať lokálne alebo v heslom chránenej Railway službe.
+
+Verejná inštancia: <https://genome-normalizer-production.up.railway.app/>
+
+Bezpečné zdieľané demo používa iba syntetické dáta:
+
+```text
+používateľ: demo
+heslo:      genome-demo-2026
+```
+
+DEMO účet nepovoľuje vlastné uploady ani Beagle imputáciu. Po kliknutí na
+„Spustiť demo analýzu“ vykoná reálnu normalizáciu syntetického MyHeritage
+súboru, panelovú kontrolu a ponúkne výsledky na stiahnutie.
 
 ## Podporované vstupy
 
@@ -75,11 +89,12 @@ Každý beh vytvorí normalizovaný súbor, sibling dataset, stav 561-SNP panela
 výsledný predispozičný panel a JSON QC report. Imputované hodnoty sa nikdy
 nepridávajú do sibling/IBD výstupu.
 
-## Profil 23andMe v5
+## Normalizovaný profil a kompatibilita v5
 
-Bez parametra `--v5-template` program vytvorí 23andMe-v5-kompatibilnú schému
-(GRCh37, štyri stĺpce) a zachová všetky namerané markery. Repozitár neobsahuje
-úplný licenčne overený manifest 23andMe v5.
+Bez parametra `--v5-template` program vytvorí normalizovaný genotyp (GRCh37,
+plus vlákno, štyri stĺpce) a zachová všetky namerané markery. Táto otvorená
+tabuľková schéma je kompatibilná s bežnými downstream nástrojmi. Repozitár
+neobsahuje úplný licenčne overený manifest platformy v5.
 
 Ak je dostupný presný v5 markerový súbor, možno vytvoriť pevnú kostru:
 
@@ -124,4 +139,5 @@ docker run --rm -p 8000:8000 \
 Podrobný návrh komponentov a dátového toku je v
 [ARCHITECTURE.md](ARCHITECTURE.md). Bezpečnostné pravidlá sú v
 [SECURITY.md](SECURITY.md). Pôvod a správa veľkých externých súborov sú
-popísané v [REFERENCE_DATA.md](REFERENCE_DATA.md).
+popísané v [REFERENCE_DATA.md](REFERENCE_DATA.md). Úplná technická správa
+GitHub/Railway prevádzky je v [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md).

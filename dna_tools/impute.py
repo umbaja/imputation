@@ -95,7 +95,7 @@ def run_beagle(sample_23andme: str, out_prefix: str,
       map_dir    : priecinok s plink.chr{N}.GRCh37.map
       fasta      : (volitelne) referencna FASTA na zarovnanie REF/ALT
     Toto je tenky wrapper okolo krokov v impute_pipeline.sh; vrati cestu k
-    vyslednemu imputovanemu 23andMe suboru. Ak nastroje/panel chybaju, vyhodi
+    výslednému predispozičnému normalizovanému súboru. Ak nástroje/panel chýbajú, vyhodí
     zrozumitelnu chybu.
     """
     raise NotImplementedError(

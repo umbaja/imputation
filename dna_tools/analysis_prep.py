@@ -191,10 +191,10 @@ def prepare_for_analyses(
     """Normalize a sample once and produce sibling and predisposition outputs.
 
     ``v5_template_path`` is optional because the repository currently contains
-    a v3/v4/v5 position union, not an exact 23andMe v5 manifest.  Without the
-    template the sibling output is a v5-compatible GRCh37/plus-strand file that
-    retains every measured marker.  With the template it is an exact marker-set
-    scaffold and missing v5 markers are written as no-calls.
+    a v3/v4/v5 position union, not an exact licensed v5 marker manifest. Without
+    the template, the normalized GRCh37/plus-strand sibling output retains every
+    measured marker. With the template it becomes an exact marker-set scaffold
+    and missing v5 markers are written as no-calls.
     """
 
     if not 0.0 <= float(min_gp) <= 1.0:
@@ -236,10 +236,10 @@ def prepare_for_analyses(
             online=online_annotation,
         )
 
-    normalized = out_dir / f"{stem}.normalized_grch37_23andme.txt"
+    normalized = out_dir / f"{stem}.normalized_grch37.txt"
     write_23andme(data, str(normalized), drop_no_call=False, keep_non_rs=True)
 
-    canonical_profile = "23andMe-v5-compatible"
+    canonical_profile = "normalized-GRCh37-plus-strand"
     sibling = normalized
     sibling_markers = data.n_variants
     if v5_template_path:
@@ -247,10 +247,10 @@ def prepare_for_analyses(
         if not template.exists():
             raise FileNotFoundError(f"Chýba šablóna 23andMe v5: {template}")
         scaffold, scaffold_stats = build_scaffold(data, str(template))
-        sibling = out_dir / f"{stem}.sibling_23andme_v5.txt"
+        sibling = out_dir / f"{stem}.sibling_normalized_v5.txt"
         write_23andme(scaffold, str(sibling), sort_alleles=False)
         sibling_markers = int(scaffold_stats["template_markers"])
-        canonical_profile = "23andMe-v5-exact-template"
+        canonical_profile = "normalized-GRCh37-exact-v5-marker-template"
 
     panel_result = check_panel(
         data,
@@ -326,8 +326,8 @@ def prepare_for_analyses(
     report["warnings"] = list(data.warnings)
     if not v5_template_path:
         report["warnings"].append(
-            "Nebola dodaná presná šablóna 23andMe v5; sibling výstup používa "
-            "v5-kompatibilný formát a zachováva všetky namerané markery."
+            "Nebola dodaná presná markerová šablóna v5; normalizovaný sibling výstup "
+            "zachováva všetky namerané markery v GRCh37 na plus vlákne."
         )
     if not run_imputation and len(imputable):
         report["warnings"].append(
