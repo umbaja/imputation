@@ -24,6 +24,18 @@ DEMO účet nepovoľuje vlastné uploady ani Beagle imputáciu. Po kliknutí na
 „Spustiť demo analýzu“ vykoná reálnu normalizáciu syntetického MyHeritage
 súboru, panelovú kontrolu a ponúkne výsledky na stiahnutie.
 
+Obmedzený TEST účet umožňuje spracovať vlastné dáta v ostrej pipeline:
+
+```text
+používateľ: test
+heslo:      odovzdáva sa oprávneným testerom mimo verejného repozitára
+limit:      5 genotypov denne, spoločne pre celý účet
+```
+
+Kvóta sa obnovuje o polnoci v časovom pásme Europe/Bratislava a jej stav
+pretrváva na Railway volume aj po reštarte. Účet používajte iba na dáta, ktoré
+máte oprávnenie spracúvať.
+
 ## Podporované vstupy
 
 - 23andMe raw data

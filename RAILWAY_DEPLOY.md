@@ -1,7 +1,7 @@
 # Railway nasadenie
 
-Toto nasadenie je určené pre jednu heslom chránenú inštanciu s vlastníckym a
-voliteľným obmedzeným DEMO účtom. Genetické
+Toto nasadenie je určené pre jednu heslom chránenú inštanciu s vlastníckym,
+voliteľným obmedzeným DEMO a kvótovaným TEST účtom. Genetické
 vstupy sa spracujú v kontajneri, výsledky sa dajú stiahnuť a pracovné súbory
 sa automaticky mažú. Imputácia beží vždy iba pre jednu úlohu naraz.
 
@@ -29,6 +29,11 @@ Odporúčaná minimálna pamäť pre jednu imputáciu je 4 GB. Premenné `JOBS=1
    APP_PASSWORD=<dlhé náhodné heslo>
    DEMO_USERNAME=demo
    DEMO_PASSWORD=genome-demo-2026
+   TEST_USERNAME=test
+   TEST_PASSWORD=<dlhé náhodné heslo odovzdané iba testerom>
+   TEST_DAILY_LIMIT=5
+   TEST_QUOTA_TIMEZONE=Europe/Bratislava
+   TEST_QUOTA_FILE=/app/ref/test_account_quota.json
    BOOTSTRAP_REFERENCE=1
    REFERENCE_DIR=/app/ref
    BEAGLE_JAR=/app/ref/beagle.jar
@@ -56,8 +61,15 @@ Zdieľané konto `DEMO_USERNAME` môže spustiť iba zabudovanú syntetickú uk�
 Middleware mu blokuje uploady, všeobecné downloady, logy aj výpočtovo nákladnú
 imputáciu. Ak DEMO účet nechcete, obe premenné `DEMO_*` vynechajte.
 
-`APP_PASSWORD` nevkladajte do Git repozitára ani do screenshotov. Railway
-premenná je jediným miestom, kde má byť uložená.
+Zdieľané konto `TEST_USERNAME` môže spustiť ostrú kompletnú dávkovú pipeline.
+Server počíta prijaté vzorky a povoľuje najviac `TEST_DAILY_LIMIT` genotypov za
+deň, spoločne pre celý účet. Počítadlo sa obnovuje o polnoci v
+`TEST_QUOTA_TIMEZONE` a súbor `TEST_QUOTA_FILE` zostáva na persistentnom
+volume. Ak TEST účet nechcete, vynechajte `TEST_USERNAME` a `TEST_PASSWORD`;
+limit, časové pásmo a cestu možno ponechať.
+
+`APP_PASSWORD` ani `TEST_PASSWORD` nevkladajte do Git repozitára, dokumentácie
+alebo screenshotov. Railway Variables sú jediné miesto, kde majú byť uložené.
 
 ## Prevádzkové správanie
 

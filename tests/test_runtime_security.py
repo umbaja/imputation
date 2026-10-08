@@ -65,6 +65,18 @@ class RuntimeSecurityTests(unittest.TestCase):
                 mock.patch.dict(os.environ, environment, clear=True):
             self.assertEqual(runtime_security.basic_auth_role(f"Basic {token}"), "demo")
 
+    def test_test_auth_has_distinct_role(self):
+        token = base64.b64encode(b"test:test-secret").decode("ascii")
+        environment = {
+            "APP_USERNAME": "owner",
+            "APP_PASSWORD": "owner-secret",
+            "TEST_USERNAME": "test",
+            "TEST_PASSWORD": "test-secret",
+        }
+        with mock.patch.object(runtime_security, "PUBLIC_MODE", True), \
+                mock.patch.dict(os.environ, environment, clear=True):
+            self.assertEqual(runtime_security.basic_auth_role(f"Basic {token}"), "test")
+
     def test_partial_demo_config_fails_closed(self):
         environment = {
             "APP_USERNAME": "owner",
@@ -75,6 +87,31 @@ class RuntimeSecurityTests(unittest.TestCase):
                 mock.patch.dict(os.environ, environment, clear=True):
             with self.assertRaises(RuntimeError):
                 runtime_security.validate_public_config()
+
+    def test_partial_test_config_fails_closed(self):
+        environment = {
+            "APP_USERNAME": "owner",
+            "APP_PASSWORD": "owner-secret",
+            "TEST_USERNAME": "test",
+        }
+        with mock.patch.object(runtime_security, "PUBLIC_MODE", True), \
+                mock.patch.dict(os.environ, environment, clear=True):
+            with self.assertRaises(RuntimeError):
+                runtime_security.validate_public_config()
+
+    def test_test_quota_is_persistent_and_enforced(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(runtime_security, "TEST_QUOTA_FILE", Path(directory) / "quota.json"), \
+                mock.patch.object(runtime_security, "TEST_DAILY_LIMIT", 5), \
+                mock.patch.object(runtime_security, "_quota_day", return_value="2026-10-08"):
+            status = runtime_security.reserve_test_quota("test", 3)
+            self.assertEqual(status["used"], 3)
+            self.assertEqual(status["remaining"], 2)
+            with self.assertRaises(HTTPException) as error:
+                runtime_security.reserve_test_quota("test", 3)
+            self.assertEqual(error.exception.status_code, 429)
+            runtime_security.refund_test_quota("test", 1)
+            self.assertEqual(runtime_security.test_quota_status()["remaining"], 3)
 
     def test_public_mode_fails_closed_without_credentials(self):
         with mock.patch.object(runtime_security, "PUBLIC_MODE", True), \

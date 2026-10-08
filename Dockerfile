@@ -6,7 +6,7 @@ FROM python:3.11-slim
 #   samtools              -> faidx index FASTA (pre bcftools +fixref)
 #   curl, unzip, gzip     -> overené stiahnutie referencií pri prvom štarte
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash coreutils gawk gzip default-jre-headless bcftools tabix samtools \
+    bash coreutils gawk gzip tzdata default-jre-headless bcftools tabix samtools \
     curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

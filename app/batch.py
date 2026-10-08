@@ -29,7 +29,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -45,7 +45,10 @@ from app.runtime_security import (                                     # noqa: E
     MAX_BATCH_SAMPLES,
     PUBLIC_MODE,
     prune_runtime_files,
+    refund_test_quota,
+    reserve_test_quota,
     save_upload_limited,
+    test_quota_status,
 )
 
 WORK = ROOT / "work"
@@ -421,7 +424,8 @@ def _run_batch_locked(job_id: str) -> None:
 # --- endpointy ----------------------------------------------------------------
 
 @router.post("/api/batch-run")
-async def api_batch_run(samples: List[UploadFile] = File(...),
+async def api_batch_run(request: Request,
+                        samples: List[UploadFile] = File(...),
                         panel: Optional[UploadFile] = File(None),
                         out_dir: str = Form("out"),
                         online: bool = Form(False),
@@ -444,8 +448,12 @@ async def api_batch_run(samples: List[UploadFile] = File(...),
     if not JOB_LOCK.acquire(blocking=False):
         raise HTTPException(409, "Iná imputácia už beží. Počkaj na jej dokončenie.")
 
+    role = getattr(request.state, "account_role", "owner")
+    quota_reserved = False
     prefix = uuid.uuid4().hex[:8]
     try:
+        reserve_test_quota(role, len(samples))
+        quota_reserved = role == "test"
         if PUBLIC_MODE:
             resolved = WORK / f"{prefix}_results"
             bam_dir = ""
@@ -471,9 +479,13 @@ async def api_batch_run(samples: List[UploadFile] = File(...),
                 "started": None, "ended": None, "out_path": None, "out_name": None,
             })
     except ValueError as e:
+        if quota_reserved:
+            refund_test_quota(role, len(samples))
         JOB_LOCK.release()
         raise HTTPException(400, str(e))
     except Exception:
+        if quota_reserved:
+            refund_test_quota(role, len(samples))
         JOB_LOCK.release()
         raise
 
@@ -495,9 +507,14 @@ async def api_batch_run(samples: List[UploadFile] = File(...),
         threading.Thread(target=_run_batch_locked, args=(job_id,), daemon=True).start()
     except Exception:
         BATCH_JOBS.pop(job_id, None)
+        if quota_reserved:
+            refund_test_quota(role, len(samples))
         JOB_LOCK.release()
         raise
-    return {"job_id": job_id, "out_dir": str(resolved), "n": len(items)}
+    response = {"job_id": job_id, "out_dir": str(resolved), "n": len(items)}
+    if role == "test":
+        response["test_quota"] = test_quota_status()
+    return response
 
 
 @router.get("/api/batch-progress/{job_id}")

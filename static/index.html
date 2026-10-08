@@ -108,6 +108,7 @@
   .card.demo{border:2px solid var(--grn);background:linear-gradient(135deg,#ffffff,#f2fff6)}
   .card.demo h2 .step{background:linear-gradient(135deg,#1a7f37,#2da44e)}
   body.demo-mode .full-mode{display:none}
+  body.test-mode .full-mode:not(.batch){display:none}
   .card.batch h2 .step{background:linear-gradient(135deg,#4f46e5,#7c3aed);font-size:.9rem}
   button.big{padding:13px 22px;font-size:.98rem;border-radius:10px}
   input.path{width:100%;border:1px solid var(--bd2);border-radius:8px;padding:9px 11px;
@@ -222,7 +223,7 @@
       <img src="https://nu3gen.eu/assets/img/nu3gen-logo.png" alt="NU3Gen">
     </a>
     <div class="product-lockup">
-      <h1>GENOME NORMALIZER <span id="appver" style="font-size:0.62em;opacity:0.65;font-weight:500">v2.3</span></h1>
+      <h1>GENOME NORMALIZER <span id="appver" style="font-size:0.62em;opacity:0.65;font-weight:500">v2.4</span></h1>
       <div class="sub" id="privacyMode">Normalizácia genetických dát → oddelený sibling dataset + cielená imputácia predispozičného panela.</div>
     </div>
     <div id="statuschip" onclick="loadStatus()">⏳ zisťujem stav…</div>
@@ -812,12 +813,19 @@ async function loadStatus(){
     imputeReady=!!s.imputation_ready;refreshImpBtns();
     if(s.account_role==='demo'){
       document.body.classList.add('demo-mode');
+      document.body.classList.remove('test-mode');
       $('privacyMode').textContent='DEMO účet — spracúva iba zabudovanú syntetickú vzorku; nahrávanie vlastných dát je zablokované.';
       $('statuschip').title='Obmedzený bezpečný DEMO režim';
+    }else if(s.account_role==='test'){
+      document.body.classList.remove('demo-mode');
+      document.body.classList.add('test-mode');
+      const q=s.test_quota||{};
+      $('privacyMode').textContent=`TEST účet — ostrá pipeline, spoločný limit ${q.limit||5} genotypov denne; zostáva ${q.remaining??'—'}. Dáta sa mažú približne po ${s.retention_hours} h.`;
     }else{
       document.body.classList.remove('demo-mode');
+      document.body.classList.remove('test-mode');
     }
-    if(s.public_mode&&s.account_role!=='demo'){
+    if(s.public_mode&&s.account_role!=='demo'&&s.account_role!=='test'){
       $('privacyMode').textContent=`Chránené serverové spracovanie. Nahrané súbory sa automaticky mažú približne po ${s.retention_hours} h.`;
       $('bOutDirGroup').style.display='none';
       $('bBamGroup').style.display='none';
@@ -826,9 +834,15 @@ async function loadStatus(){
     }
     const chip=$('statuschip');
     if(s.account_role==='demo'){chip.innerHTML='✅ DEMO pripravené';chip.style.color='#7ee787';}
+    else if(s.account_role==='test'){
+      const q=s.test_quota||{};
+      chip.innerHTML=`🧪 TEST · zostáva ${q.remaining??'—'}/${q.limit||5}`;
+      chip.style.color=(q.remaining||0)>0?'#7ee787':'#e3b341';
+    }
     else if(s.imputation_ready){chip.innerHTML='✅ imputácia pripravená';chip.style.color='#7ee787';}
     else{chip.innerHTML='⚙️ normalizácia OK · imputácia: nastav referenciu';chip.style.color='#e3b341';}
     chip.title=s.account_role==='demo'?'Obmedzený bezpečný DEMO režim':
+      s.account_role==='test'?`Ostrá pipeline s kvótou; reset o polnoci (${s.test_quota?.timezone||'Europe/Bratislava'})`:
       `Python ${s.python} · Java ${s.java?'áno':'nie'} · Beagle ${s.beagle_jar?'áno':'nie'} · `+
       `FASTA ${s.fasta?'áno':'nie'} · bref3: ${s.bref3_files} · ID ref ${s.id_reference?'áno':'nie'}`;
     const w=s.wgs||{}, wh=$('wgsHint');

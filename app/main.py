@@ -49,10 +49,11 @@ from app.runtime_security import (                            # noqa: E402
     basic_auth_role,
     prune_runtime_files,
     save_upload_limited,
+    test_quota_status,
     validate_public_config,
 )
 
-APP_VERSION = "2.3"
+APP_VERSION = "2.4"
 
 WORK = ROOT / "work"
 LOGS = ROOT / "logs"
@@ -78,6 +79,19 @@ def demo_path_allowed(path: str) -> bool:
 
     return (
         path in DEMO_ALLOWED_PATHS
+        or path.startswith("/api/demo-download/")
+        or path.startswith("/static/")
+    )
+
+
+def test_path_allowed(path: str) -> bool:
+    """Return whether the shared test role may use an HTTP path."""
+
+    return (
+        path in {"/", "/api/status", "/api/batch-run", "/api/demo-run"}
+        or path.startswith("/api/batch-progress/")
+        or path.startswith("/api/batch-cancel/")
+        or path.startswith("/api/download/")
         or path.startswith("/api/demo-download/")
         or path.startswith("/static/")
     )
@@ -118,6 +132,11 @@ async def hosted_security(request, call_next):
         if role == "demo" and not demo_path_allowed(request.url.path):
             return PlainTextResponse(
                 "DEMO účet povoľuje iba zabudovanú syntetickú ukážku.",
+                status_code=403,
+            )
+        if role == "test" and not test_path_allowed(request.url.path):
+            return PlainTextResponse(
+                "Testovací účet povoľuje kompletnú dávkovú pipeline do denného limitu.",
                 status_code=403,
             )
     request.state.account_role = role
@@ -197,7 +216,7 @@ def status(request: Request):
     bref3 = 0
     if ref_dir and Path(ref_dir).is_dir():
         bref3 = len(list(Path(ref_dir).glob("*.bref3")))
-    return {
+    payload = {
         "version": APP_VERSION,
         "public_mode": PUBLIC_MODE,
         "account_role": getattr(request.state, "account_role", "owner"),
@@ -214,6 +233,9 @@ def status(request: Request):
                                  and bref3 > 0 and fasta and Path(fasta or "x").exists()),
         "wgs": wgs.wgs_status(),
     }
+    if getattr(request.state, "account_role", "owner") == "test":
+        payload["test_quota"] = test_quota_status()
+    return payload
 
 
 @app.post("/api/detect")

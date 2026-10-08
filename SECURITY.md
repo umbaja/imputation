@@ -13,6 +13,9 @@ Genotypové súbory sú citlivé osobné a zdravotné údaje.
 - Výsledky predispozícií nie sú klinická diagnóza.
 - Zdieľaný DEMO účet spracúva iba verzovaný syntetický súbor. Middleware mu
   blokuje vlastné uploady, všeobecné downloady, logy a imputáciu.
+- Zdieľaný TEST účet smie používať iba kompletnú produkčnú dávkovú pipeline.
+  Server vynucuje spoločný limit päť prijatých genotypov denne a počítadlo
+  ukladá na persistentný Railway volume.
 
 Bezpečnostnú chybu nezverejňujte spolu s reálnymi genotypovými dátami. Pošlite
 iba minimálny syntetický reprodukčný príklad.

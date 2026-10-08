@@ -35,6 +35,13 @@ class DemoTests(unittest.TestCase):
         self.assertFalse(main.demo_path_allowed("/api/batch-run"))
         self.assertFalse(main.demo_path_allowed("/api/download/private.txt"))
 
+    def test_test_path_allowlist_only_allows_limited_production_pipeline(self):
+        self.assertTrue(main.test_path_allowed("/api/batch-run"))
+        self.assertTrue(main.test_path_allowed("/api/batch-progress/job-id"))
+        self.assertTrue(main.test_path_allowed("/api/download/result.txt"))
+        self.assertFalse(main.test_path_allowed("/api/convert"))
+        self.assertFalse(main.test_path_allowed("/api/logs"))
+
 
 if __name__ == "__main__":
     unittest.main()

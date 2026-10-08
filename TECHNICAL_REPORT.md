@@ -1,8 +1,8 @@
 # Technická správa: Genome Normalizer
 
-Stav dokumentu: 8. októbra 2026  
-Verzia aplikácie: 2.3  
-Repozitár: <https://github.com/umbaja/imputation>  
+Stav dokumentu: 8. októbra 2026<br>
+Verzia aplikácie: 2.4<br>
+Repozitár: <https://github.com/umbaja/imputation><br>
 Produkcia: <https://genome-normalizer-production.up.railway.app/>
 
 ## 1. Účel systému
@@ -136,7 +136,36 @@ downloady a statické súbory. Vlastné uploady, všeobecné downloady, logy,
 dávková pipeline a Beagle sú blokované odpoveďou HTTP 403. Beagle sa v deme
 zámerne nespúšťa, aby zdieľaný účet nemohol spotrebovať výpočtové zdroje.
 
-## 8. GitHub
+## 8. Testovací účet
+
+Produkčný TEST účet je určený na obmedzené spracovanie vlastných genotypov v
+ostrej Railway prevádzke:
+
+```text
+používateľ: test
+heslo:      súkromný Railway secret, odovzdáva sa oprávneným testerom
+limit:      5 genotypov za kalendárny deň
+```
+
+TEST používa rovnakú produkčnú pipeline, referencie Beagle/1000 Genomes a
+561-SNP panel ako vlastník. Webové rozhranie mu sprístupní kompletnú dávkovú
+pipeline, progres, zrušenie úlohy a stiahnutie výsledkov. Manuálne servisné
+kroky a aplikačné logy sú pre túto zdieľanú rolu zablokované.
+
+Limit je spoločný pre všetkých používateľov tohto účtu, nie päť genotypov na
+jednu osobu. Každá vzorka v serverom prijatej dávke spotrebuje jednu jednotku;
+neskoršia chyba počas výpočtu ju automaticky nevracia. Server kvótu kontroluje
+atomicky a po vyčerpaní odpovie HTTP 429. Nový deň začína o polnoci v časovom
+pásme `Europe/Bratislava`. Počítadlo je uložené v
+`/app/ref/test_account_quota.json` na persistentnom Railway volume, preto ho
+reštart ani redeploy nevynuluje.
+
+Účet spracúva reálne genetické údaje. Používateľ ho smie použiť iba s právnym
+základom a informovaným súhlasom dotknutej osoby. Výstupy sa s pracovnými
+súbormi automaticky mažú približne po šiestich hodinách; samotná denná kvóta
+ostáva zachovaná na volume.
+
+## 9. GitHub
 
 Zdrojový repozitár je verejný `umbaja/imputation`; produkčná vetva je `main`.
 Push do `main` spustí dve nezávislé udalosti:
@@ -153,7 +182,7 @@ referencie. `.gitignore` blokuje okrem iného `work/`, `out/`, `results/`,
 iba kód, malý 561-SNP panel, lokálna komprimovaná ID mapa, syntetické demo a
 manifest referencií.
 
-## 9. Railway produkcia
+## 10. Railway produkcia
 
 | Položka | Hodnota |
 |---|---|
@@ -179,6 +208,11 @@ manifest referencií.
 | `APP_PASSWORD` | tajný Railway secret |
 | `DEMO_USERNAME` | `demo` |
 | `DEMO_PASSWORD` | `genome-demo-2026` – zámerne verejné demo heslo |
+| `TEST_USERNAME` | `test` |
+| `TEST_PASSWORD` | súkromný Railway secret; nepublikuje sa v repozitári ani správe |
+| `TEST_DAILY_LIMIT` | `5` genotypov za deň |
+| `TEST_QUOTA_TIMEZONE` | `Europe/Bratislava` |
+| `TEST_QUOTA_FILE` | `/app/ref/test_account_quota.json` |
 | `BOOTSTRAP_REFERENCE` | `1` |
 | `REFERENCE_DIR` | `/app/ref` |
 | `BEAGLE_JAR` | `/app/ref/beagle.jar` |
@@ -193,11 +227,12 @@ manifest referencií.
 | `MAX_BATCH_SAMPLES` | `5` |
 | `RAILWAY_HEALTHCHECK_TIMEOUT_SEC` | `3600` |
 
-`APP_PASSWORD` sa nesmie commitnúť, zapisovať do technickej správy ani
-zverejniť v logu. Zmena vlastníckeho hesla sa robí iba cez Railway Variables a
-vyvolá nové nasadenie.
+`APP_PASSWORD` ani `TEST_PASSWORD` sa nesmú commitnúť, zapisovať do technickej
+správy alebo zverejniť v logu. DEMO heslo je zámerne verejné, pretože jeho rola
+nemôže prijímať cudzie dáta ani spustiť imputáciu. Zmena vlastníckeho alebo
+testovacieho hesla sa robí iba cez Railway Variables a vyvolá nové nasadenie.
 
-## 10. Referenčné dáta a prvý štart
+## 11. Referenčné dáta a prvý štart
 
 `reference_manifest.tsv` pripína URL, presnú veľkosť a SHA-256 každého súboru:
 
@@ -215,11 +250,13 @@ Volume je persistentný, preto ďalší deployment iba skontroluje prítomnosť
 Beagle, FASTA, `.fai`, 23 bref3 panelov a 23 máp. Kód a `/app/work` sú na
 ephemerálnom filesystéme kontajnera; referencie zostávajú na volume.
 
-## 11. Bezpečnosť a životný cyklus dát
+## 12. Bezpečnosť a životný cyklus dát
 
 - verejný režim zlyhá pri štarte, ak chýba vlastnícke meno alebo heslo;
-- HTTP Basic Auth rozlišuje rolu `owner` a `demo` pomocou constant-time
+- HTTP Basic Auth rozlišuje roly `owner`, `test` a `demo` pomocou constant-time
   porovnania;
+- TEST middleware povoľuje ostrú dávkovú pipeline, ale vynucuje spoločnú
+  perzistentnú kvótu päť prijatých genotypov denne;
 - TLS končí na Railway edge;
 - odpovede nastavujú `Cache-Control: no-store`, HSTS, `nosniff`, zákaz iframe,
   nulový referrer a zákaz kamery/mikrofónu/geolokácie;
@@ -237,7 +274,7 @@ HTTP Basic Auth je prevádzkové minimum, nie kompletný systém používateľsk
 základ, informovaný súhlas, audit, incidentný proces a podľa požiadaviek aj
 šifrovanie uložených dát vlastným kľúčom.
 
-## 12. Prevádzka a diagnostika
+## 13. Prevádzka a diagnostika
 
 Základná kontrola:
 
@@ -271,12 +308,14 @@ Najčastejšie poruchy:
   spustiť bootstrap;
 - HTTP 401: nesprávne Basic Auth údaje;
 - HTTP 403 na DEMO účte: požadovaná funkcia je úmyselne povolená iba vlastníkovi;
+- HTTP 403 na TEST účte: účet povoľuje iba kompletnú dávkovú pipeline a jej výstupy;
+- HTTP 429 na TEST účte: spoločná denná kvóta je vyčerpaná;
 - HTTP 409: iná imputácia drží globálny zámok;
 - HTTP 413: upload alebo celá požiadavka prekročila nastavený limit;
 - nedostatočný sibling prienik: výsledok označiť ako nedostatočné dáta, nie
   dopĺňať 561 panelových SNP do IBD vetvy.
 
-## 13. Limity
+## 14. Limity
 
 - Základná zostava je GRCh37/hg19; hg38 vyžaduje validovaný liftover.
 - Produkčné WGS/WES pomocné referencie nie sú v aktuálnom Railway nasadení
