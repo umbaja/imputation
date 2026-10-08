@@ -1,6 +1,4 @@
-"""
-main.py — localhost FastAPI appka pre prevod genetickych dat do 23andMe formatu
-a cielenu imputaciu panelovych lokusov.
+"""FastAPI UI for local or password-protected hosted genome normalization.
 
 Spustenie (lokalne):
     cd genome-app
@@ -8,7 +6,8 @@ Spustenie (lokalne):
     uvicorn app.main:app --host 127.0.0.1 --port 8000
     -> otvor http://127.0.0.1:8000
 
-Bezi CELE lokalne. Genotypove data neopustia tvoj pocitac.
+Pri lokálnom spustení dáta neopúšťajú počítač. Verejný režim musí mať
+nastavené PUBLIC_MODE=1, APP_USERNAME a APP_PASSWORD.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 # --- cesty --------------------------------------------------------------------
@@ -41,10 +40,18 @@ from dna_tools.convert import write_23andme, merge_imputed_into_23andme   # noqa
 from dna_tools.panel import check_panel, annotate_by_rsid     # noqa: E402
 from dna_tools.targeted_impute import build_windows           # noqa: E402
 from dna_tools import wgs                                     # noqa: E402
+from app.runtime_security import (                            # noqa: E402
+    JOB_LOCK,
+    MAX_REQUEST_MB,
+    PUBLIC_MODE,
+    RETENTION_HOURS,
+    basic_credentials_valid,
+    prune_runtime_files,
+    save_upload_limited,
+    validate_public_config,
+)
 
-APP_VERSION = "2.1"   # 2.1 = detekcia Illuminy je strukturalna (stlpcova hlavicka
-                      #       za [Data]), zvladne export bez stlpca "SNP Name";
-                      #       taky marker sa oznaci ako chrom:pozicia
+APP_VERSION = "2.2"
 
 WORK = ROOT / "work"
 LOGS = ROOT / "logs"
@@ -65,22 +72,74 @@ def log(msg: str) -> None:
         fh.write(line + "\n")
 
 
-app = FastAPI(title="Genome Converter (localhost)", version=APP_VERSION)
+validate_public_config()
+app = FastAPI(
+    title="Genome Normalizer",
+    version=APP_VERSION,
+    docs_url=None if PUBLIC_MODE else "/docs",
+    redoc_url=None if PUBLIC_MODE else "/redoc",
+    openapi_url=None if PUBLIC_MODE else "/openapi.json",
+)
 log(f"=== Genome Converter v{APP_VERSION} startuje ===")
+
+
+@app.middleware("http")
+async def hosted_security(request, call_next):
+    """Require credentials in public mode and add conservative browser headers."""
+
+    if PUBLIC_MODE and request.url.path != "/healthz":
+        if not basic_credentials_valid(request.headers.get("authorization")):
+            return PlainTextResponse(
+                "Vyžaduje sa prihlásenie.",
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="Genome Normalizer"'},
+            )
+    content_length = request.headers.get("content-length")
+    if request.method in {"POST", "PUT", "PATCH"} and content_length:
+        try:
+            if int(content_length) > MAX_REQUEST_MB * 1024 * 1024:
+                return PlainTextResponse("Požiadavka je príliš veľká.", status_code=413)
+        except ValueError:
+            pass
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if PUBLIC_MODE:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # davkove spracovanie (jedno tlacidlo -> cela pipeline pre N vzoriek)
 from app.batch import router as batch_router   # noqa: E402
 app.include_router(batch_router)
 
 
+def _cleanup_loop() -> None:
+    interval = max(300, min(1800, int(RETENTION_HOURS * 1800)))
+    while True:
+        time.sleep(interval)
+        if not JOB_LOCK.locked():
+            prune_runtime_files(WORK)
+
+
+@app.on_event("startup")
+def start_runtime_cleanup() -> None:
+    if PUBLIC_MODE:
+        prune_runtime_files(WORK)
+        threading.Thread(target=_cleanup_loop, name="runtime-cleanup", daemon=True).start()
+
+
 # --- pomocne ------------------------------------------------------------------
 
 def _save_upload(up: UploadFile) -> Path:
+    prune_runtime_files(WORK)
     sid = uuid.uuid4().hex[:8]
     dest = WORK / f"{sid}_{Path(up.filename).name}"
-    with open(dest, "wb") as fh:
-        shutil.copyfileobj(up.file, fh)
-    log(f"upload: {up.filename} -> {dest.name} ({dest.stat().st_size} B)")
+    save_upload_limited(up, dest)
+    display_name = dest.name if PUBLIC_MODE else up.filename
+    log(f"upload: {display_name} ({dest.stat().st_size} B)")
     return dest
 
 
@@ -89,6 +148,10 @@ def _which(name: str) -> Optional[str]:
 
 
 # --- endpointy ----------------------------------------------------------------
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True, "version": APP_VERSION}
 
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -109,6 +172,9 @@ def status():
         bref3 = len(list(Path(ref_dir).glob("*.bref3")))
     return {
         "version": APP_VERSION,
+        "public_mode": PUBLIC_MODE,
+        "retention_hours": RETENTION_HOURS,
+        "default_panel": (DATA / "panel_full_561.csv").exists(),
         "python": sys.version.split()[0],
         "java": bool(_which("java")),
         "beagle_jar": bool(beagle and Path(beagle).exists()),
@@ -295,22 +361,30 @@ def _run_impute_job(job_id: str, cmd, env, final_path: str) -> None:
         job["running"] = False
         job["done"] = True
         job["ended"] = time.time()
+        if JOB_LOCK.locked():
+            JOB_LOCK.release()
 
 
 @app.post("/api/impute-run")
 async def api_impute_run(sample: UploadFile = File(...),
                          targets: UploadFile = File(...),
                          panel_status: UploadFile = File(...),
-                         dr2_min: float = Form(0.3),
+                         dr2_min: float = Form(0.9),
                          dedup_by: str = Form("position")):
     """Spusti cielenu imputaciu na pozadi a vrati job_id (progres cez /api/impute-progress)."""
     st = status()
     if not st["imputation_ready"]:
         raise HTTPException(400, "Imputacia nie je pripravena: chyba java/beagle/panel/FASTA. "
                                  "Nastav BEAGLE_JAR, REF_DIR, FASTA a stiahni panel (setup_reference.sh).")
-    sp = _save_upload(sample)
-    tp = _save_upload(targets)
-    pp = _save_upload(panel_status)
+    if not JOB_LOCK.acquire(blocking=False):
+        raise HTTPException(409, "Iná imputácia už beží. Počkaj na jej dokončenie.")
+    try:
+        sp = _save_upload(sample)
+        tp = _save_upload(targets)
+        pp = _save_upload(panel_status)
+    except Exception:
+        JOB_LOCK.release()
+        raise
     out_prefix = WORK / (sp.stem + "_targeted")
     final = Path(str(out_prefix) + "_panel_final.csv")
     cmd = ["bash", str(ROOT / "targeted_impute.sh"), str(sp), str(tp), str(pp), str(out_prefix)]
@@ -323,12 +397,16 @@ async def api_impute_run(sample: UploadFile = File(...),
     }
     log(f"impute-run[{job_id[:8]}]: spustam {' '.join(cmd)}")
     dedup = "rsid" if str(dedup_by).lower().startswith("rs") else "position"
-    threading.Thread(
-        target=_run_impute_job,
-        args=(job_id, cmd,
-              {**os.environ, "DR2MIN": str(dr2_min), "DEDUP_BY": dedup}, str(final)),
-        daemon=True,
-    ).start()
+    try:
+        threading.Thread(
+            target=_run_impute_job,
+            args=(job_id, cmd,
+                  {**os.environ, "DR2MIN": str(dr2_min), "DEDUP_BY": dedup}, str(final)),
+            daemon=True,
+        ).start()
+    except Exception:
+        JOB_LOCK.release()
+        raise
     return {"job_id": job_id}
 
 
@@ -371,14 +449,16 @@ async def api_merge_final(sample: UploadFile = File(...),
 
 @app.get("/api/download/{name}")
 def download(name: str):
-    p = WORK / name
-    if not p.exists():
+    p = (WORK / Path(name).name).resolve()
+    if p.parent != WORK.resolve() or not p.is_file():
         raise HTTPException(404, "subor neexistuje")
     return FileResponse(str(p), filename=name)
 
 
 @app.get("/api/logs", response_class=PlainTextResponse)
 def get_logs(tail: int = 200):
+    if PUBLIC_MODE:
+        raise HTTPException(404, "log nie je vo verejnom režime dostupný")
     if not LOG_FILE.exists():
         return "(log je prazdny)"
     lines = LOG_FILE.read_text(encoding="utf-8").splitlines()

@@ -38,12 +38,21 @@ if str(ROOT) not in sys.path:
 from dna_tools.parsers import parse_file, relabel_from_reference       # noqa: E402
 from dna_tools.convert import write_23andme, merge_imputed_into_23andme  # noqa: E402
 from dna_tools.panel import check_panel, annotate_by_rsid              # noqa: E402
+from dna_tools.targeted_impute import merge_panel                      # noqa: E402
 from dna_tools import wgs                                              # noqa: E402
+from app.runtime_security import (                                     # noqa: E402
+    JOB_LOCK,
+    MAX_BATCH_SAMPLES,
+    PUBLIC_MODE,
+    prune_runtime_files,
+    save_upload_limited,
+)
 
 WORK = ROOT / "work"
 DATA = ROOT / "data"
 LOGS = ROOT / "logs"
 ID_REF = DATA / "id_position_reference_v3v4v5.tsv.gz"
+DEFAULT_PANEL = DATA / "panel_full_561.csv"
 BATCH_LOG = LOGS / "batch.log"
 
 router = APIRouter()
@@ -106,10 +115,9 @@ def _resolve_bam_dir(raw: str) -> str:
 
 
 def _save_upload(up: UploadFile, prefix: str) -> Path:
+    prune_runtime_files(WORK)
     dest = WORK / f"{prefix}_{Path(up.filename).name}"
-    with open(dest, "wb") as fh:
-        shutil.copyfileobj(up.file, fh)
-    return dest
+    return save_upload_limited(up, dest)
 
 
 def _safe_stem(name: str) -> str:
@@ -259,6 +267,11 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
                   n_called=data.n_called, converted=conv.name)
         _blog(f"  [{stem}] prevod OK ({data.source_format}, {data.n_variants} variantov)")
 
+    # Sibling/IBD výstup je nemenná kópia priamo nameraných genotypov. Nikdy
+    # doň neskôr nepridávame Beagle odhady.
+    sibling = WORK / f"{prefix}_{stem}_sibling_measured_23andme.txt"
+    shutil.copyfile(conv, sibling)
+
     # --- 2) panel-check ------------------------------------------------------
     _item_set(item, stage="kontrola panela", stage_no=2)
     res = check_panel(str(conv), str(panel_path),
@@ -276,6 +289,7 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
 
     # --- 3) imputacia --------------------------------------------------------
     completed = conv
+    panel_final = WORK / f"{prefix}_{stem}_predisposition_panel.csv"
     have_targets = any(str(r.get("position", "")).strip() not in ("", "nan", "<NA>", "None")
                        for r in csv.DictReader(open(targets_csv, encoding="utf-8")))
     if len(missing) and have_targets:
@@ -285,7 +299,8 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
                "DR2MIN": str(job["opts"]["dr2_min"]),
                "DEDUP_BY": job["opts"]["dedup_by"],
                "FLANK": str(job["opts"]["flank"])}
-        panel_final = _run_impute(job, item, conv, targets_csv, status_csv, out_prefix, env)
+        generated_panel = _run_impute(job, item, conv, targets_csv, status_csv, out_prefix, env)
+        shutil.copyfile(generated_panel, panel_final)
         _item_set(item, panel_final=panel_final.name)
 
         # --- 4) doplnenie spat do 23andMe -----------------------------------
@@ -307,6 +322,7 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
         except Exception:  # noqa: BLE001
             pass
     else:
+        merge_panel(str(status_csv)).to_csv(panel_final, index=False)
         why = ("panel je kompletne pokryty" if not len(missing)
                else "chybajuce lokusy nemaju znamu poziciu (nedaju sa imputovat)")
         _item_set(item, stage="imputácia preskočená", stage_no=4,
@@ -319,12 +335,19 @@ def _process_one(job: dict, item: dict, src: Path, panel_path: Path, out_dir: Pa
     # --- 5) ulozenie do cieloveho priecinka ---------------------------------
     _item_set(item, stage="ukladám výsledok", stage_no=5)
     out_dir.mkdir(parents=True, exist_ok=True)
-    dest = out_dir / f"{stem}_kompletny_23andme.txt"
-    shutil.copyfile(completed, dest)
+    sibling_dest = out_dir / f"{stem}_sibling_measured_23andme.txt"
+    predisposition_dest = out_dir / f"{stem}_predisposition_23andme.txt"
+    panel_dest = out_dir / f"{stem}_predisposition_panel.csv"
+    shutil.copyfile(sibling, sibling_dest)
+    shutil.copyfile(completed, predisposition_dest)
+    shutil.copyfile(panel_final, panel_dest)
     _item_set(item, stage="hotovo", stage_no=6, status="ok",
-              out_path=str(dest), out_name=dest.name,
+              out_path=str(predisposition_dest), out_name=predisposition_dest.name,
+              sibling_download=f"/api/download/{sibling.name}",
+              predisposition_download=f"/api/download/{Path(completed).name}",
+              panel_download=f"/api/download/{panel_final.name}",
               download=f"/api/download/{Path(completed).name}")
-    _blog(f"  [{stem}] ULOZENE -> {dest}")
+    _blog(f"  [{stem}] ULOZENE -> sibling + predisposition + panel")
 
 
 def _run_batch(job_id: str) -> None:
@@ -387,48 +410,77 @@ def _run_batch(job_id: str) -> None:
           f"{int(job['ended']-job['started'])} s ===")
 
 
+def _run_batch_locked(job_id: str) -> None:
+    try:
+        _run_batch(job_id)
+    finally:
+        if JOB_LOCK.locked():
+            JOB_LOCK.release()
+
+
 # --- endpointy ----------------------------------------------------------------
 
 @router.post("/api/batch-run")
 async def api_batch_run(samples: List[UploadFile] = File(...),
-                        panel: UploadFile = File(...),
+                        panel: Optional[UploadFile] = File(None),
                         out_dir: str = Form("out"),
-                        online: bool = Form(True),
-                        dr2_min: float = Form(0.3),
+                        online: bool = Form(False),
+                        dr2_min: float = Form(0.9),
                         flank: int = Form(250000),
                         dedup_by: str = Form("position"),
-                        min_conf: float = Form(0.0),
+                        min_conf: float = Form(0.9),
                         bam_dir: str = Form(""),
                         min_dp: int = Form(8)):
     """Spusti celu pipeline pre vsetky nahrane vzorky. Vrati job_id."""
     if not samples:
         raise HTTPException(400, "Nevybral si žiadnu vzorku.")
+    if len(samples) > MAX_BATCH_SAMPLES:
+        raise HTTPException(400, f"Naraz možno spracovať najviac {MAX_BATCH_SAMPLES} vzoriek.")
     if not _imputation_ready():
         raise HTTPException(400,
             "Imputácia nie je pripravená (chýba java / BEAGLE_JAR / REF_DIR / FASTA). "
             "Spusti appku cez '▶ Genome Converter' alebo `bash start_app.sh` vo WSL.")
 
+    if not JOB_LOCK.acquire(blocking=False):
+        raise HTTPException(409, "Iná imputácia už beží. Počkaj na jej dokončenie.")
+
     prefix = uuid.uuid4().hex[:8]
     try:
-        resolved = resolve_out_dir(out_dir)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    panel_path = _save_upload(panel, prefix)
+        if PUBLIC_MODE:
+            resolved = WORK / f"{prefix}_results"
+            bam_dir = ""
+            online = False
+        else:
+            resolved = resolve_out_dir(out_dir)
+        if panel is None:
+            if not DEFAULT_PANEL.exists():
+                raise HTTPException(500, "Vstavaný 561-SNP panel nie je dostupný.")
+            panel_path = DEFAULT_PANEL
+            panel_name = DEFAULT_PANEL.name
+        else:
+            panel_path = _save_upload(panel, prefix)
+            panel_name = panel.filename
 
-    items = []
-    for up in samples:
-        src = _save_upload(up, prefix)
-        items.append({
-            "name": up.filename, "stem": _safe_stem(up.filename), "src": str(src),
-            "stage": "čaká", "stage_no": 0, "status": "pending", "error": None,
-            "regions_done": 0, "regions_total": 0,
-            "started": None, "ended": None, "out_path": None, "out_name": None,
-        })
+        items = []
+        for up in samples:
+            src = _save_upload(up, prefix)
+            items.append({
+                "name": up.filename, "stem": _safe_stem(up.filename), "src": str(src),
+                "stage": "čaká", "stage_no": 0, "status": "pending", "error": None,
+                "regions_done": 0, "regions_total": 0,
+                "started": None, "ended": None, "out_path": None, "out_name": None,
+            })
+    except ValueError as e:
+        JOB_LOCK.release()
+        raise HTTPException(400, str(e))
+    except Exception:
+        JOB_LOCK.release()
+        raise
 
     job_id = uuid.uuid4().hex
     BATCH_JOBS[job_id] = {
         "id": job_id, "prefix": prefix, "items": items,
-        "panel_path": str(panel_path), "panel_name": panel.filename,
+        "panel_path": str(panel_path), "panel_name": panel_name,
         "out_dir_input": out_dir, "out_dir_resolved": str(resolved),
         "opts": {"online": bool(online), "dr2_min": float(dr2_min), "flank": int(flank),
                  "dedup_by": "rsid" if str(dedup_by).lower().startswith("rs") else "position",
@@ -439,7 +491,12 @@ async def api_batch_run(samples: List[UploadFile] = File(...),
         "error": None, "report": None, "started": None, "ended": None,
         "cancel": False, "proc": None,
     }
-    threading.Thread(target=_run_batch, args=(job_id,), daemon=True).start()
+    try:
+        threading.Thread(target=_run_batch_locked, args=(job_id,), daemon=True).start()
+    except Exception:
+        BATCH_JOBS.pop(job_id, None)
+        JOB_LOCK.release()
+        raise
     return {"job_id": job_id, "out_dir": str(resolved), "n": len(items)}
 
 
@@ -470,7 +527,11 @@ def api_batch_progress(job_id: str):
             "wes_nocall": it.get("wes_nocall"), "wes_bam": it.get("wes_bam"),
             "bam": it.get("bam"),
             "out_name": it.get("out_name"), "out_path": it.get("out_path"),
-            "download": it.get("download"), "elapsed": el,
+            "download": it.get("download"),
+            "sibling_download": it.get("sibling_download"),
+            "predisposition_download": it.get("predisposition_download"),
+            "panel_download": it.get("panel_download"),
+            "elapsed": el,
         })
     return {
         "out_dir": job["out_dir_resolved"], "panel": job["panel_name"],

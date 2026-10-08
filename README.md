@@ -38,6 +38,10 @@ bash start_app.sh
 
 Webové rozhranie bude na <http://127.0.0.1:8000>.
 
+Postup pre heslom chránené verejné nasadenie na Railway je v
+[RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md). Referenčné dáta ostávajú mimo GitHubu
+a pri prvom štarte sa stiahnu na pripojený persistentný volume.
+
 Bez imputácie stačí Python 3.9+:
 
 ```bash
@@ -96,6 +100,7 @@ Referencie sa nezapisujú do obrazu; pripájajú sa ako volume:
 ```bash
 docker build -t genome-normalizer .
 docker run --rm -p 8000:8000 \
+  -e PUBLIC_MODE=0 \
   -v "$PWD/ref:/app/ref:ro" \
   -v "$PWD/out:/app/out" \
   genome-normalizer

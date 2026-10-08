@@ -128,7 +128,7 @@
       <h1>◧ GENOME CONVERTER <span id="appver" style="font-size:0.62em;opacity:0.65;font-weight:400">v2.1</span></h1>
     </div>
     <div id="statuschip" onclick="loadStatus()">⏳ zisťujem stav…</div>
-    <div class="sub">Lokálny prevod surových genetických dát → 23andMe formát + cielená imputácia. Všetko beží na tvojom počítači — dáta ho neopustia.</div>
+    <div class="sub" id="privacyMode">Normalizácia genetických dát → oddelený sibling dataset + cielená imputácia predispozičného panela.</div>
   </div>
 </header>
 <main>
@@ -137,8 +137,8 @@
   <div class="card batch">
     <h2><span class="step">🚀</span> Celá pipeline jedným tlačidlom</h2>
     <div class="hint">Vyber ľubovoľný počet vzoriek naraz + jeden SNP panel, zadaj cieľový priečinok a klikni.
-      Pre každú vzorku prebehne <b>prevod → kontrola panela → cielená imputácia → doplnenie do 23andMe</b> bez ďalších zásahov.
-      Hotové kompletné <code>.txt</code> súbory sa uložia do zadaného priečinka.</div>
+      Pre každú vzorku prebehne <b>prevod → oddelenie sibling dát → kontrola panela → cielená imputácia</b> bez ďalších zásahov.
+      Výsledkom je zvlášť súbor iba s nameranými genotypmi a zvlášť predispozičný výstup.</div>
     <div class="row">
       <div>
         <label>vstupné vzorky (môžeš vybrať viac naraz)</label>
@@ -147,20 +147,24 @@
           <input type="file" id="bSamples" multiple></div>
       </div>
       <div>
-        <label>SNP panel (spoločný pre všetky vzorky)</label>
+        <label>SNP panel (nepovinný)</label>
         <div class="drop" id="bPanelDrop"><span class="ic">📋</span>
-          <span class="dztext">panel — zoznam rsID alebo CSV</span>
+          <span class="dztext">vlastný panel — inak sa použije vstavaný 561-SNP panel</span>
           <input type="file" id="bPanel"></div>
       </div>
     </div>
-    <label>cieľový priečinok pre výsledky</label>
-    <input type="text" id="bOutDir" class="path" value="out"
-           placeholder="out   alebo   C:\Users\meno\Desktop\vysledky">
-    <div class="muted" style="margin-top:4px">Relatívna cesta sa berie od priečinka appky. Windows cestu (<code>C:\…</code>) preložím na WSL automaticky. Priečinok vytvorím, ak neexistuje.</div>
+    <div id="bOutDirGroup">
+      <label>cieľový priečinok pre výsledky</label>
+      <input type="text" id="bOutDir" class="path" value="out"
+             placeholder="out   alebo   C:\Users\meno\Desktop\vysledky">
+      <div class="muted" style="margin-top:4px">Pri lokálnom spustení možno výsledky uložiť aj do Windows priečinka.</div>
+    </div>
 
-    <label style="margin-top:14px">priečinok s BAM súbormi — len pre WGS/WES VCF (nepovinné)</label>
-    <input type="text" id="bBamDir" class="path" placeholder="napr. C:\data\bam   (nechaj prázdne, ak nahrávaš čipové dáta)">
-    <div class="muted" style="margin-top:4px">Ak nahráš <b>VCF zo sekvenovania</b>, appka ho rozpozná: hg38 preloží na GRCh37 a podľa BAM doplní <code>ref/ref</code> tam, kde bolo pokrytie (≥8×). BAM sa páruje podľa názvu (<code>S24061.GATK.snp.vcf</code> → <code>S24061*.bam</code>). Bez BAM ostanú nevariantné pozície ako no-call. <span id="wgsHint"></span></div>
+    <div id="bBamGroup">
+      <label style="margin-top:14px">priečinok s BAM súbormi — len pre WGS/WES VCF (nepovinné)</label>
+      <input type="text" id="bBamDir" class="path" placeholder="napr. C:\data\bam   (nechaj prázdne, ak nahrávaš čipové dáta)">
+      <div class="muted" style="margin-top:4px">Ak nahráš <b>VCF zo sekvenovania</b>, appka ho rozpozná: hg38 preloží na GRCh37 a podľa BAM doplní <code>ref/ref</code> tam, kde bolo pokrytie (≥8×). BAM sa páruje podľa názvu (<code>S24061.GATK.snp.vcf</code> → <code>S24061*.bam</code>). Bez BAM ostanú nevariantné pozície ako no-call. <span id="wgsHint"></span></div>
+    </div>
     <div class="btns">
       <button id="bBtn" class="big" onclick="doBatch()" disabled>🚀 Spustiť celú pipeline</button>
       <button id="bCancelBtn" class="ghost" onclick="cancelBatch()" style="display:none">Zrušiť dávku</button>
@@ -230,7 +234,7 @@
         <div class="drop" id="impStatusDrop"><span class="ic">📊</span><span class="dztext">panel status</span><input type="file" id="impStatus"></div></div>
     </div>
     <div class="opts">
-      <label style="display:flex;align-items:center;gap:6px">Prah DR2 (spoľahlivosť): <input type="number" id="dr2" value="0.3" step="0.05" min="0" max="1"></label>
+      <label style="display:flex;align-items:center;gap:6px">Min. max(GP) (spoľahlivosť): <input type="number" id="dr2" value="0.9" step="0.05" min="0" max="1"></label>
       <label style="display:flex;align-items:center;gap:6px">Deduplikovať ciele podľa:
         <select id="dedupBy" style="border:1px solid var(--bd2);border-radius:6px;padding:5px 8px;font-size:.85rem">
           <option value="position">pozície</option>
@@ -251,8 +255,8 @@
       <div><label>Finálny panel z kroku 3 (…_panel_final.csv)</label>
         <div class="drop" id="mgPanelDrop"><span class="ic">🧩</span><span class="dztext">panel_final.csv</span><input type="file" id="mgPanel"></div></div>
     </div>
-    <label>Min. spoľahlivosť imputácie (max GP): <input type="number" id="mgConf" value="0" step="0.05" min="0" max="1"></label>
-    <div class="hint" style="margin-top:2px">0 = doplniť všetky imputované. Napr. 0,9 = len veľmi isté.</div>
+    <label>Min. spoľahlivosť imputácie (max GP): <input type="number" id="mgConf" value="0.9" step="0.05" min="0" max="1"></label>
+    <div class="hint" style="margin-top:2px">Predvolene sa prijmú iba odhady s max(GP) ≥ 0,9.</div>
     <div class="btns"><button id="mgBtn" onclick="doMerge()" disabled>Vytvoriť kompletný 23andMe</button></div>
     <div class="out" id="mgOut"></div>
   </div>
@@ -332,7 +336,7 @@ function makeMultiZone(zoneId,inputId,onFiles){
   });
 }
 function bCheck(){
-  $('bBtn').disabled=!($('bSamples').files.length&&$('bPanel').files.length);
+  $('bBtn').disabled=!$('bSamples').files.length;
 }
 makeMultiZone('bSamplesDrop','bSamples',bCheck);
 makeZone('bPanelDrop','bPanel',bCheck);
@@ -344,10 +348,10 @@ function fmtT(s){const m=Math.floor(s/60),r=s%60;return m?`${m}m ${r}s`:`${r}s`;
 
 async function doBatch(){
   const samples=$('bSamples').files, panel=$('bPanel').files[0];
-  if(!samples.length||!panel)return;
+  if(!samples.length)return;
   const fd=new FormData();
   [...samples].forEach(f=>fd.append('samples',f));
-  fd.append('panel',panel);
+  if(panel)fd.append('panel',panel);
   fd.append('out_dir',$('bOutDir').value||'out');
   fd.append('bam_dir',$('bBamDir').value||'');
   loading($('bBtn'),true,'spúšťam…');
@@ -402,6 +406,13 @@ function renderBatch(d){
       if(it.skip_reason)bits.push(esc(it.skip_reason));
       if(it.regions_total&&it.status!=='ok')bits.push(`regióny ${it.regions_done}/${it.regions_total}`);
       if(it.out_name)bits.push(`→ <code>${esc(it.out_name)}</code>`);
+      if(it.status==='ok'){
+        const links=[];
+        if(it.sibling_download)links.push(`<a class="dl" href="${it.sibling_download}">⬇ sibling — iba namerané</a>`);
+        if(it.predisposition_download)links.push(`<a class="dl" href="${it.predisposition_download}">⬇ predispozície</a>`);
+        if(it.panel_download)links.push(`<a class="dl" href="${it.panel_download}">⬇ panel CSV</a>`);
+        if(links.length)bits.push(`<span class="dlbar">${links.join('')}</span>`);
+      }
       meta=bits.join(' · ');
     }
     const ico=it.status==='running'||(it.status==='pending'&&it.stage_no>0)?BICON.running:(BICON[it.status]||'○');
@@ -644,6 +655,13 @@ async function loadStatus(){
   try{const s=await (await fetch('/api/status')).json();
     if(s.version){const av=$('appver');if(av)av.textContent='v'+s.version;}
     imputeReady=!!s.imputation_ready;refreshImpBtns();
+    if(s.public_mode){
+      $('privacyMode').textContent=`Chránené serverové spracovanie. Nahrané súbory sa automaticky mažú približne po ${s.retention_hours} h.`;
+      $('bOutDirGroup').style.display='none';
+      $('bBamGroup').style.display='none';
+    }else{
+      $('privacyMode').textContent='Lokálne spracovanie — genetické dáta neopúšťajú tento počítač.';
+    }
     const chip=$('statuschip');
     if(s.imputation_ready){chip.innerHTML='✅ imputácia pripravená';chip.style.color='#7ee787';}
     else{chip.innerHTML='⚙️ prevod OK · imputácia: nastav referenciu';chip.style.color='#e3b341';}
