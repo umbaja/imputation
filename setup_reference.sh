@@ -168,8 +168,16 @@ elif [ "$VERIFY_ONLY" -eq 1 ]; then
   exit 1
 else
   fasta_part="${FASTA_PATH}.part"
-  echo "  rozbaľujem: ${FASTA_ARCHIVE#"$ROOT/"}"
-  gzip -cd "$FASTA_ARCHIVE" > "$fasta_part"
+  if verify_file "$fasta_part" "$FASTA_BYTES" "$FASTA_SHA"; then
+    echo "  OK (cache, rozbalené): ${fasta_part#"$ROOT/"}"
+  else
+    echo "  rozbaľujem: ${FASTA_ARCHIVE#"$ROOT/"}"
+    gzip_status=0
+    gzip -cd "$FASTA_ARCHIVE" > "$fasta_part" || gzip_status=$?
+    if [ "$gzip_status" -ne 0 ]; then
+      echo "  UPOZORNENIE: gzip skončil s kódom $gzip_status; výsledok musí prejsť kontrolou manifestu" >&2
+    fi
+  fi
   if ! verify_file "$fasta_part" "$FASTA_BYTES" "$FASTA_SHA"; then
     echo "CHYBA: rozbalená FASTA nesedí s manifestom: $fasta_part" >&2
     exit 1

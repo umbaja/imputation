@@ -16,6 +16,11 @@ class RailwayConfigTests(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn('CMD ["bash", "deploy/start.sh"]', dockerfile)
 
+    def test_reference_bootstrap_verifies_fasta_after_gzip_warning(self):
+        script = (ROOT / "setup_reference.sh").read_text(encoding="utf-8")
+        self.assertIn('gzip -cd "$FASTA_ARCHIVE" > "$fasta_part" || gzip_status=$?', script)
+        self.assertIn('verify_file "$fasta_part" "$FASTA_BYTES" "$FASTA_SHA"', script)
+
     def test_application_exposes_healthcheck(self):
         main = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
         self.assertIn('@app.get("/healthz")', main)
