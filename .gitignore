@@ -9,6 +9,7 @@ __pycache__/
 .venv-wsl/
 build/
 dist/
+tmp/
 
 # Runtime and downloaded reference data
 ref/

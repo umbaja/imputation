@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Genome Converter — localhost</title>
+<title>Genome Normalizer | NU3Gen</title>
 <style>
   :root{
     --bg:#eef1f5;--card:#fff;--bd:#d6dce4;--bd2:#c3ccd6;--fg:#1f2328;--mut:#5b6572;
@@ -122,19 +122,122 @@
   .bitem.err{background:var(--red2);border-color:#ffc9c4}
   .bitem.run{background:var(--blu2);border-color:#a9d5ff}
   .bitem .bt{font-size:.74rem;color:var(--mut);flex:none;font-variant-numeric:tabular-nums}
+
+  /* ---- NU3Gen visual identity ---- */
+  :root{
+    --bg:#f6fafc;--card:#fff;--bd:#dbe8ed;--bd2:#c9dce4;--fg:#2f3e45;--mut:#6f8189;
+    --grn:#4d7f72;--grn2:#e9f4f0;--blu:#3888b0;--blu2:#eaf4f8;--red:#b94d58;--red2:#fbecef;
+    --amb:#8a6a27;--amb2:#fbf5e8;--accent:#3888b0;
+    --accent-deep:#2d647f;--accent-mid:#8aa8b0;--accent-pale:#f3f8fa;--dna-grey:#606060;
+    --shadow:0 18px 48px rgba(45,100,127,.07),0 2px 7px rgba(45,100,127,.04);
+  }
+  body{
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:radial-gradient(circle at 92% 2%,rgba(56,136,176,.08),transparent 28rem),var(--bg);
+    color:var(--fg)
+  }
+  header{
+    background:rgba(255,255,255,.94);color:var(--fg);padding:0 24px;min-height:82px;
+    border-bottom:1px solid rgba(219,232,237,.88);box-shadow:none;backdrop-filter:blur(18px)
+  }
+  header::after{
+    content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+    background:linear-gradient(90deg,transparent 4%,var(--accent) 26%,var(--accent-mid) 46%,var(--dna-grey) 50%,var(--accent-mid) 54%,var(--accent) 74%,transparent 96%);opacity:.25
+  }
+  header .wrap{max-width:1120px;min-height:82px;gap:18px;flex-wrap:nowrap}
+  .nu3-brand{display:inline-flex;align-items:center;flex:none;text-decoration:none;padding-right:20px;border-right:1px solid var(--bd)}
+  .nu3-brand img{display:block;width:142px;height:auto}
+  .product-lockup{min-width:0}
+  h1{font-family:inherit;font-size:1.06rem;letter-spacing:-.015em;color:var(--accent-deep);font-weight:780}
+  .sub{color:var(--mut);font-size:.76rem;margin-top:2px;flex-basis:auto;white-space:normal}
+  #statuschip{background:var(--accent-pale);border:1px solid var(--bd);color:var(--accent-deep);font-weight:700;padding:7px 13px}
+  main{max-width:1120px;margin:34px auto 74px;padding:0 20px;gap:20px}
+  .product-hero{
+    position:relative;overflow:hidden;background:linear-gradient(145deg,#fff,#eef7fa);border:1px solid var(--bd);
+    border-radius:30px;padding:46px 48px;min-height:300px;box-shadow:var(--shadow)
+  }
+  .product-hero::before{
+    content:"";position:absolute;width:310px;height:310px;right:-78px;top:-110px;border-radius:50%;
+    border:34px solid rgba(56,136,176,.07);box-shadow:0 0 0 32px rgba(138,168,176,.045)
+  }
+  .product-hero::after{
+    content:"";position:absolute;left:48px;right:48px;bottom:34px;height:18px;
+    background:repeating-linear-gradient(115deg,transparent 0 13px,rgba(56,136,176,.28) 13px 16px,transparent 16px 28px);
+    opacity:.52;mask-image:linear-gradient(90deg,#000,transparent 82%)
+  }
+  .hero-kicker{font-size:.76rem;text-transform:uppercase;letter-spacing:.14em;color:var(--accent);font-weight:800;margin-bottom:14px}
+  .product-hero h2{font-size:clamp(2.15rem,5vw,4.25rem);line-height:.98;letter-spacing:-.055em;color:var(--fg);margin:0 0 18px;max-width:790px}
+  .product-hero h2 span{color:var(--accent)}
+  .product-hero p{max-width:750px;color:#53656d;font-size:1.02rem;margin:0 0 48px}
+  .hero-metrics{display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:1}
+  .hero-metrics span{background:rgba(255,255,255,.84);border:1px solid var(--bd);border-radius:999px;padding:7px 12px;color:var(--accent-deep);font-size:.72rem;font-weight:750}
+  .card{border-color:var(--bd);border-radius:24px;padding:25px 27px;box-shadow:var(--shadow);position:relative}
+  .card::before{content:"";position:absolute;left:27px;top:0;width:70px;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent-mid),var(--dna-grey));border-radius:0 0 4px 4px}
+  .card h2{font-size:1.13rem;color:var(--fg);letter-spacing:-.018em;margin-top:3px}
+  .step{border-radius:8px;background:var(--accent);box-shadow:0 6px 16px rgba(56,136,176,.16)}
+  .hint{color:var(--mut);line-height:1.58}
+  .drop{border-color:var(--bd2);border-radius:17px;background:var(--accent-pale);padding:22px}
+  .drop:hover,.drop.over{border-color:var(--accent);background:var(--blu2)}
+  .drop.has{border-color:var(--grn);background:var(--grn2);color:var(--grn)}
+  button{background:var(--accent);border-radius:13px;padding:10px 17px;box-shadow:0 8px 20px rgba(56,136,176,.12)}
+  button:hover:not(:disabled){background:var(--accent-deep);filter:none;transform:translateY(-1px)}
+  button.ghost{background:#fff;color:var(--accent-deep);border-color:var(--bd);box-shadow:none}
+  button.ghost:hover:not(:disabled){background:var(--accent-pale)}
+  input.path,input[type=number],select{border-color:var(--bd2)!important;border-radius:11px!important;background:#fff!important}
+  a.dl{background:var(--accent-deep);border-radius:12px;box-shadow:0 8px 20px rgba(45,100,127,.1)}
+  a.dl:hover{background:var(--accent);filter:none}
+  .card.batch{border:1px solid var(--bd);box-shadow:var(--shadow)}
+  .card.batch h2 .step{background:linear-gradient(135deg,var(--accent),var(--accent-deep))}
+  .card.demo{border:1px solid #cfe3ea;background:linear-gradient(145deg,#fff,#eef7fa)}
+  .card.demo h2 .step{background:linear-gradient(135deg,var(--accent),var(--accent-deep))}
+  .card.demo::after{content:"DEMO";position:absolute;right:26px;top:20px;color:rgba(56,136,176,.11);font-size:3.4rem;font-weight:850;letter-spacing:-.07em;pointer-events:none}
+  .stat{background:var(--accent-pale);border-color:var(--bd);border-radius:15px;padding:12px 14px}
+  .stat .v,.stat.b .v{color:var(--accent-deep)}
+  .fmt{background:var(--blu2);color:var(--accent-deep)}
+  .bar{background:var(--accent-pale)}
+  .bar>span{background:linear-gradient(90deg,var(--accent-deep),var(--accent))}
+  .previewwrap{border-color:var(--bd);border-radius:14px}
+  table.prev th{border-color:var(--bd);color:var(--accent-deep)}
+  table.prev tr:hover td{background:var(--accent-pale)}
+  pre.outlog,pre#log{background:#2f3e45;color:#d9e7eb;border-radius:14px;border-top:3px solid var(--accent)}
+  .app-footer{max-width:1120px;margin:0 auto 28px;padding:28px 20px 0;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:24px;color:var(--mut);font-size:.76rem}
+  .app-footer img{width:122px;height:auto;display:block}
+  .app-footer strong{color:var(--accent-deep)}
+  @media(max-width:720px){
+    header{padding:0 14px}.nu3-brand{padding-right:12px}.nu3-brand img{width:100px}
+    header .wrap{min-height:72px;gap:8px 10px;flex-wrap:wrap;padding:10px 0}
+    .product-lockup{flex:1}.product-lockup h1{font-size:.78rem;line-height:1.25}.sub{display:none}
+    #statuschip{order:3;flex-basis:100%;max-width:100%;margin-left:0;text-align:center;font-size:.65rem;padding:5px 9px;white-space:normal}
+    main{margin-top:20px;padding:0 14px}.product-hero{padding:34px 24px;min-height:330px;border-radius:24px}
+    .product-hero h2{font-size:2.25rem;overflow-wrap:anywhere}.product-hero::after{left:24px;right:24px}
+    .card{padding:22px 19px;border-radius:20px}.card::before{left:19px}
+    .app-footer{margin-left:14px;margin-right:14px;flex-direction:column;align-items:flex-start}
+  }
 </style>
 </head>
 <body>
 <header>
   <div class="wrap">
-    <div>
-      <h1>◧ GENOME NORMALIZER <span id="appver" style="font-size:0.62em;opacity:0.65;font-weight:400">v2.3</span></h1>
+    <a class="nu3-brand" href="https://nu3gen.eu/" target="_blank" rel="noopener" aria-label="NU3Gen">
+      <img src="https://nu3gen.eu/assets/img/nu3gen-logo.png" alt="NU3Gen">
+    </a>
+    <div class="product-lockup">
+      <h1>GENOME NORMALIZER <span id="appver" style="font-size:0.62em;opacity:0.65;font-weight:500">v2.3</span></h1>
+      <div class="sub" id="privacyMode">Normalizácia genetických dát → oddelený sibling dataset + cielená imputácia predispozičného panela.</div>
     </div>
     <div id="statuschip" onclick="loadStatus()">⏳ zisťujem stav…</div>
-    <div class="sub" id="privacyMode">Normalizácia genetických dát → oddelený sibling dataset + cielená imputácia predispozičného panela.</div>
   </div>
 </header>
 <main>
+
+  <section class="product-hero" aria-labelledby="heroTitle">
+    <div class="hero-kicker">03 / Dáta a softvér</div>
+    <h2 id="heroTitle">Jeden <span>normalizovaný genotyp.</span><br>Dve analytické vetvy.</h2>
+    <p>Spracovanie dát z rôznych čipových platforiem pre sibling/IBD analýzu príbuznosti a samostatné hodnotenie predispozícií.</p>
+    <div class="hero-metrics">
+      <span>GRCh37 / plus vlákno</span><span>561-SNP panel</span><span>IBD iba z meraných dát</span><span>cielená imputácia</span>
+    </div>
+  </section>
 
   <!-- Bezpečná syntetická ukážka dostupná aj zdieľanému DEMO účtu -->
   <div class="card demo" id="demoCard">
@@ -287,6 +390,10 @@
   </div>
 
 </main>
+<footer class="app-footer">
+  <a href="https://nu3gen.eu/" target="_blank" rel="noopener"><img src="https://nu3gen.eu/assets/img/nu3gen-logo.png" alt="NU3Gen"></a>
+  <div><strong>Aplikovaná genetika / dáta / softvér</strong><br>Genome Normalizer je výskumný a informatívny nástroj, nie klinická diagnóza.</div>
+</footer>
 <div class="toast" id="toast"></div>
 
 <script>

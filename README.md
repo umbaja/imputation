@@ -140,4 +140,6 @@ Podrobný návrh komponentov a dátového toku je v
 [ARCHITECTURE.md](ARCHITECTURE.md). Bezpečnostné pravidlá sú v
 [SECURITY.md](SECURITY.md). Pôvod a správa veľkých externých súborov sú
 popísané v [REFERENCE_DATA.md](REFERENCE_DATA.md). Úplná technická správa
-GitHub/Railway prevádzky je v [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md).
+GitHub/Railway prevádzky je v [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md) a
+v graficky spracovanej
+[PDF verzii](output/pdf/Genome_Normalizer_Technicka_sprava_GitHub_Railway.pdf).
