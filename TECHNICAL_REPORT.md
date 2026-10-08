@@ -23,6 +23,16 @@ Imputované lokusy sa nikdy nepridávajú do sibling/IBD datasetu. Toto pravidlo
 bráni tomu, aby sa panelové odhady nesprávne použili ako meraný dôkaz
 príbuznosti.
 
+### Produkčná webová aplikácia
+
+Samotná aplikácia je dostupná na tejto adrese:
+
+**[https://genome-normalizer-production.up.railway.app/](https://genome-normalizer-production.up.railway.app/)**
+
+Ide o ostrú Railway prevádzku. Po otvorení adresy prehliadač vyžiada
+prihlasovacie údaje pre vlastnícky, TEST alebo DEMO účet podľa požadovaného
+režimu použitia.
+
 ## 2. Podporované vstupy
 
 - 23andMe raw data;
